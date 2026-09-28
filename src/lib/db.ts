@@ -1,10 +1,10 @@
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import Database from "better-sqlite3";
-import { desc } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
-import { type Message, messages } from "./schema";
+import { type Message, messages, type SemesterPlan, semesterPlans, students } from "./schema";
 
 // One SQLite file is the app's whole persistent state. In production
 // fly.toml points DATABASE_PATH at the machine's volume (/data), which is
@@ -24,7 +24,7 @@ export const db = drizzle(client);
 // commit the migration it writes to drizzle/.
 migrate(db, { migrationsFolder: "./drizzle" });
 
-export type { Message };
+export type { Message, SemesterPlan };
 
 export function listMessages(): Message[] {
   return db.select().from(messages).orderBy(desc(messages.id)).limit(50).all();
@@ -32,4 +32,24 @@ export function listMessages(): Message[] {
 
 export function addMessage(body: string): Message {
   return db.insert(messages).values({ body }).returning().get();
+}
+
+// One active plan per Student ID: return it if it exists, otherwise create
+// both the student record and a fresh plan. Student ID is just an
+// identifier here, not authentication.
+export function getOrCreatePlan(studentId: string): SemesterPlan {
+  const existing = db
+    .select()
+    .from(semesterPlans)
+    .where(eq(semesterPlans.studentId, studentId))
+    .get();
+  if (existing) return existing;
+
+  db.insert(students).values({ studentId }).onConflictDoNothing().run();
+
+  return db
+    .insert(semesterPlans)
+    .values({ studentId, year: new Date().getFullYear() })
+    .returning()
+    .get();
 }
