@@ -1,0 +1,197 @@
+---
+import {
+  addPlannedCourse,
+  DuplicatePlannedCourseError,
+  getOrCreatePlan,
+  getSemesterTotals,
+  listCourses,
+  listPlannedCourses,
+  removePlannedCourse,
+} from "../../lib/db";
+import "../../styles.css";
+
+// The core flow lives here: get-or-create the plan for this Student ID (on
+// every GET, so a bookmarked or refreshed URL behaves exactly like
+// re-entering the id on "/"), then add/remove planned courses. Mutations are
+// handled in this same page's frontmatter — a plain POST + redirect, no
+// client-side JS required — and redirect back to this URL with a one-time
+// `status` flash. The flash is transient UI feedback, not app state: the
+// plan itself is re-read from SQLite on every request, so refreshing or
+// dropping the query string never loses a planned course.
+const rawStudentId = decodeURIComponent(Astro.params.studentId ?? "").trim();
+if (!rawStudentId) {
+  return Astro.redirect("/", 303);
+}
+const studentId = rawStudentId.slice(0, 100);
+
+const plan = getOrCreatePlan(studentId);
+
+if (Astro.request.method === "POST") {
+  const form = await Astro.request.formData();
+  const intent = form.get("intent");
+  const redirectUrl = new URL(Astro.url.pathname, Astro.url.origin);
+
+  if (intent === "add") {
+    const courseId = Number(form.get("courseId"));
+    const semester = Number(form.get("semester"));
+    if (Number.isInteger(courseId) && (semester === 1 || semester === 2)) {
+      try {
+        addPlannedCourse(plan.id, courseId, semester);
+        redirectUrl.searchParams.set("status", "added");
+      } catch (err) {
+        if (err instanceof DuplicatePlannedCourseError) {
+          redirectUrl.searchParams.set("status", "duplicate");
+        } else {
+          throw err;
+        }
+      }
+    } else {
+      redirectUrl.searchParams.set("status", "invalid");
+    }
+  } else if (intent === "remove") {
+    const plannedCourseId = Number(form.get("plannedCourseId"));
+    redirectUrl.searchParams.set(
+      "status",
+      Number.isInteger(plannedCourseId) && removePlannedCourse(plan.id, plannedCourseId)
+        ? "removed"
+        : "invalid",
+    );
+  }
+
+  return Astro.redirect(`${redirectUrl.pathname}${redirectUrl.search}`, 303);
+}
+
+const catalogue = listCourses();
+const planned = listPlannedCourses(plan.id);
+const totals = getSemesterTotals(plan.id);
+const plannedByCourseId = new Map(planned.map((p) => [p.courseId, p]));
+
+const STATUS_MESSAGES: Record<string, { text: string; ok: boolean }> = {
+  added: { text: "Course added to your plan.", ok: true },
+  removed: { text: "Course removed from your plan.", ok: true },
+  duplicate: { text: "That course is already in your plan.", ok: false },
+  invalid: { text: "That action couldn't be completed.", ok: false },
+};
+const status = Astro.url.searchParams.get("status");
+const flash = status ? STATUS_MESSAGES[status] : undefined;
+
+const plannedForSemester = (semester: 1 | 2) => planned.filter((p) => p.semester === semester);
+---
+
+<!doctype html>
+<html lang="en-AU">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Semester plan — {studentId}</title>
+  </head>
+  <body>
+    <nav aria-label="site">
+      <a href="/">Planner</a>
+      <a href="/readme/">About</a>
+    </nav>
+    <main>
+      <h1>Your semester plan</h1>
+      <p class="note">
+        Student ID <strong>{studentId}</strong> · {plan.year} ·{" "}
+        <a href="/">switch student</a>
+      </p>
+
+      {
+        flash && (
+          <p role={flash.ok ? "status" : "alert"} class={`status ${flash.ok ? "status-ok" : "status-error"}`}>
+            {flash.text}
+          </p>
+        )
+      }
+
+      <div class="semesters">
+        {
+          ([1, 2] as const).map((semester) => (
+            <section aria-labelledby={`semester-${semester}-heading`}>
+              <h2 id={`semester-${semester}-heading`}>Semester {semester}</h2>
+              <p class="units-total">{totals[semester]} units planned</p>
+              {plannedForSemester(semester).length === 0 ? (
+                <p class="empty">No courses planned for Semester {semester} yet.</p>
+              ) : (
+                <ul class="planned-list">
+                  {plannedForSemester(semester).map((entry) => (
+                    <li>
+                      <span>
+                        <strong>{entry.course.code}</strong> — {entry.course.name} (
+                        {entry.course.units} units)
+                      </span>
+                      <form method="post">
+                        <input type="hidden" name="intent" value="remove" />
+                        <input type="hidden" name="plannedCourseId" value={entry.id} />
+                        <button aria-label={`Remove ${entry.course.code} from Semester ${semester}`}>
+                          Remove
+                        </button>
+                      </form>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          ))
+        }
+      </div>
+
+      <section aria-labelledby="catalogue-heading">
+        <h2 id="catalogue-heading">Course catalogue</h2>
+        <p class="note">
+          A small set of representative computing courses — not the full ANU
+          catalogue.
+        </p>
+        <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Code</th>
+              <th scope="col">Name</th>
+              <th scope="col">Units</th>
+              <th scope="col">Offered</th>
+              <th scope="col">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {
+              catalogue.map((course) => {
+                const existing = plannedByCourseId.get(course.id);
+                return (
+                  <tr>
+                    <td>{course.code}</td>
+                    <td>{course.name}</td>
+                    <td>{course.units}</td>
+                    <td>{course.offeredSemester}</td>
+                    <td>
+                      {existing ? (
+                        <span class="in-plan">In Semester {existing.semester}</span>
+                      ) : (
+                        <form method="post" class="add-form">
+                          <input type="hidden" name="intent" value="add" />
+                          <input type="hidden" name="courseId" value={course.id} />
+                          {(course.offeredSemester === "1" || course.offeredSemester === "Both") && (
+                            <button name="semester" value="1">
+                              Add to Semester 1
+                            </button>
+                          )}
+                          {(course.offeredSemester === "2" || course.offeredSemester === "Both") && (
+                            <button name="semester" value="2">
+                              Add to Semester 2
+                            </button>
+                          )}
+                        </form>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })
+            }
+          </tbody>
+        </table>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
