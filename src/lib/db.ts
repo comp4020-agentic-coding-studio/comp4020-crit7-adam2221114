@@ -1,7 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import Database from "better-sqlite3";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import {
@@ -9,6 +9,8 @@ import {
   courses,
   type Message,
   messages,
+  type PlannedCourse,
+  plannedCourses,
   type SemesterPlan,
   semesterPlans,
   students,
@@ -69,7 +71,15 @@ function seedCourses(): void {
 }
 seedCourses();
 
-export type { Course, Message, SemesterPlan };
+export type { Course, Message, PlannedCourse, SemesterPlan };
+
+// Thrown when a course is already in a plan — the caller (the API route)
+// decides what HTTP status that becomes.
+export class DuplicatePlannedCourseError extends Error {}
+
+function isUniqueConstraintError(err: unknown): boolean {
+  return err instanceof Error && "code" in err && err.code === "SQLITE_CONSTRAINT_UNIQUE";
+}
 
 export function listCourses(): Course[] {
   return db.select().from(courses).orderBy(courses.code).all();
@@ -101,4 +111,51 @@ export function getOrCreatePlan(studentId: string): SemesterPlan {
     .values({ studentId, year: new Date().getFullYear() })
     .returning()
     .get();
+}
+
+// Adds a course to a plan's semester. Semester must be 1 or 2 (also
+// enforced by a check constraint in the schema); a course already in the
+// plan (in either semester) raises DuplicatePlannedCourseError instead of
+// creating a second row.
+export function addPlannedCourse(
+  planId: number,
+  courseId: number,
+  semester: number,
+): PlannedCourse {
+  if (semester !== 1 && semester !== 2) {
+    throw new RangeError("semester must be 1 or 2");
+  }
+  try {
+    return db.insert(plannedCourses).values({ planId, courseId, semester }).returning().get();
+  } catch (err) {
+    if (isUniqueConstraintError(err)) {
+      throw new DuplicatePlannedCourseError(`course ${courseId} is already in plan ${planId}`);
+    }
+    throw err;
+  }
+}
+
+export function listPlannedCourses(planId: number): (PlannedCourse & { course: Course })[] {
+  return db
+    .select({
+      id: plannedCourses.id,
+      planId: plannedCourses.planId,
+      courseId: plannedCourses.courseId,
+      semester: plannedCourses.semester,
+      course: courses,
+    })
+    .from(plannedCourses)
+    .innerJoin(courses, eq(plannedCourses.courseId, courses.id))
+    .where(eq(plannedCourses.planId, planId))
+    .all();
+}
+
+// Scoped to planId so one student can never remove a row from another
+// student's plan, even if they guess another plan's row id.
+export function removePlannedCourse(planId: number, plannedCourseId: number): boolean {
+  const result = db
+    .delete(plannedCourses)
+    .where(and(eq(plannedCourses.id, plannedCourseId), eq(plannedCourses.planId, planId)))
+    .run();
+  return result.changes > 0;
 }
