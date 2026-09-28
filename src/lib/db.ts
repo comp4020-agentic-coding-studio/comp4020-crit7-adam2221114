@@ -159,3 +159,15 @@ export function removePlannedCourse(planId: number, plannedCourseId: number): bo
     .run();
   return result.changes > 0;
 }
+
+// Derived on every call from planned_courses + courses — never stored, so
+// there's nothing to fall out of sync with the rows that back it.
+export function getSemesterTotals(planId: number): { 1: number; 2: number } {
+  const totals = { 1: 0, 2: 0 };
+  for (const planned of listPlannedCourses(planId)) {
+    if (planned.semester === 1 || planned.semester === 2) {
+      totals[planned.semester] += planned.course.units;
+    }
+  }
+  return totals;
+}
