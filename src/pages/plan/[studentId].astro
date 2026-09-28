@@ -4,8 +4,9 @@ import {
   DuplicatePlannedCourseError,
   getOrCreatePlan,
   getSemesterTotals,
-  listCourses,
+  listCoursesWithPrerequisites,
   listPlannedCourses,
+  PrerequisiteNotSatisfiedError,
   removePlannedCourse,
 } from "../../lib/db";
 import "../../styles.css";
@@ -41,6 +42,12 @@ if (Astro.request.method === "POST") {
       } catch (err) {
         if (err instanceof DuplicatePlannedCourseError) {
           redirectUrl.searchParams.set("status", "duplicate");
+        } else if (err instanceof PrerequisiteNotSatisfiedError) {
+          redirectUrl.searchParams.set("status", "prerequisite");
+          redirectUrl.searchParams.set(
+            "missing",
+            err.missing.map((course) => course.code).join(","),
+          );
         } else {
           throw err;
         }
@@ -61,16 +68,23 @@ if (Astro.request.method === "POST") {
   return Astro.redirect(`${redirectUrl.pathname}${redirectUrl.search}`, 303);
 }
 
-const catalogue = listCourses();
+const catalogue = listCoursesWithPrerequisites();
 const planned = listPlannedCourses(plan.id);
 const totals = getSemesterTotals(plan.id);
 const plannedByCourseId = new Map(planned.map((p) => [p.courseId, p]));
 
+const missing = Astro.url.searchParams.get("missing");
 const STATUS_MESSAGES: Record<string, { text: string; ok: boolean }> = {
   added: { text: "Course added to your plan.", ok: true },
   removed: { text: "Course removed from your plan.", ok: true },
   duplicate: { text: "That course is already in your plan.", ok: false },
   invalid: { text: "That action couldn't be completed.", ok: false },
+  prerequisite: {
+    text: missing
+      ? `Plan ${missing} in Semester 1 first — this course requires it.`
+      : "This course's prerequisite isn't planned yet.",
+    ok: false,
+  },
 };
 const status = Astro.url.searchParams.get("status");
 const flash = status ? STATUS_MESSAGES[status] : undefined;
@@ -151,6 +165,7 @@ const plannedForSemester = (semester: 1 | 2) => planned.filter((p) => p.semester
               <th scope="col">Name</th>
               <th scope="col">Units</th>
               <th scope="col">Offered</th>
+              <th scope="col">Prerequisite</th>
               <th scope="col">Action</th>
             </tr>
           </thead>
@@ -164,6 +179,11 @@ const plannedForSemester = (semester: 1 | 2) => planned.filter((p) => p.semester
                     <td>{course.name}</td>
                     <td>{course.units}</td>
                     <td>{course.offeredSemester}</td>
+                    <td>
+                      {course.prerequisites.length === 0
+                        ? "—"
+                        : course.prerequisites.map((prerequisite) => prerequisite.code).join(", ")}
+                    </td>
                     <td>
                       {existing ? (
                         <span class="in-plan">In Semester {existing.semester}</span>
