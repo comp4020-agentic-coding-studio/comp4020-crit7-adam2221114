@@ -88,15 +88,24 @@ alternative — that group is treated as informational-only (visible in
 `requisiteText`, not enforced), while its first group (COMP6240) is still
 enforced normally.
 
+COMP6442's real prerequisite has the same two-AND-group shape (COMP7710, and
+separately MATH6005/COMP6260/MATH1005), but unlike COMP8410's second group
+COMP6260 actually is in this catalogue, so my first pass enforced both
+groups. On review this was relaxed to enforce only the COMP7710 group
+([`daf7756`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit7-adam2221114/commit/daf7756)):
+the full text is still shown verbatim, but only the first group gates adding
+the course, consistent with treating a second AND-group as informational
+whenever the smallest useful enforcement is the first group alone.
+
 I also added a lightweight "previously completed" concept, deliberately
 short of a full academic-history feature: a course can be marked completed
 against a plan, independent of any semester, and that satisfies a
-prerequisite the same way planning it in an earlier semester would. This
-turned out to be necessary rather than a nice-to-have: COMP6260 is only
-offered in Semester 2 in 2026, so a course that needs it as a prerequisite
-(COMP6442) can never be satisfied by Semester 1 → Semester 2 sequencing
-within one modeled year — previously-completed is the only way to plan
-COMP6442 at all with this constraint respected honestly. A course can't be
+prerequisite the same way planning it in an earlier semester would. This is
+still useful in general — some prerequisite courses in this catalogue are
+only offered in Semester 2, so a course that names one of them as an
+earlier-semester requirement can't always be satisfied by in-plan
+sequencing within a single modeled year, and previously-completed is the
+fallback for that case. A course can't be
 both planned and previously-completed at once (enforced with a clear error
 in both directions), and same-semester prerequisites don't count — only
 strictly-earlier semesters or previously-completed does.
