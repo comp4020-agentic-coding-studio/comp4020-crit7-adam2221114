@@ -1,47 +1,134 @@
 # Process overview
 
-<!-- TEMPLATE: this file is a shape to fill in, not a form. Replace everything
-     in it with your own overview, and delete this comment — `pnpm
-     check:evidence` will remind you if it's still here. -->
-
-Written by you, for a reader: how you got from the brief to the harness and
-agentic workflow behind this submission. Markers read this file and follow its
-citations; they don't trawl the repo for evidence you didn't point at.
-
-This file is the shape; the course site's
-[assessment page](https://comp.anu.edu.au/courses/comp4020-agentic-coding-studio/topics/assessment/#what-you-submit)
-is the requirement, and its
-[word counts](https://comp.anu.edu.au/courses/comp4020-agentic-coding-studio/topics/assessment/#word-counts)
-cover every deliverable.
-
 ## What I built
 
-A sentence or two. `README.md` is where the account of what the app is and what
-good means here lives; this file is how you got there.
+An ANU Semester Planner: a student enters a Student ID, gets an existing or
+freshly-created semester plan backed by SQLite, and can add/remove courses
+from a small representative catalogue while seeing live per-semester unit
+totals. It currently models the 2026 Master of Computing (Software
+Development), including real prerequisite/incompatibility rules and a
+lightweight "previously completed" concept, sourced from ANU's own Programs
+& Courses pages rather than invented.
 
 ## How I got here
 
-The account of the process: how the work actually went, and how you knew the
-result was right. Tell it in whatever order makes it clear. A weekly prototype
-needs a paragraph or two; an assignment needs more.
+### Building the MVP slice by slice
 
-Cite the record as you go, as links whose text is the commit hash or range and
-whose target is this repo's commit or compare URL, so a reader clicks straight
-to the evidence:
+I worked in the smallest vertical slices CLAUDE.md asks for: schema first,
+then a plain function wrapping it, then the API route that calls that
+function, then a spec test hitting the route over HTTP against the real
+built server and a throwaway SQLite file — the same guarantee a page reload
+relies on, so persistence is actually being tested rather than assumed.
 
-- one commit: [`a1b2c3d`](https://github.com/YOUR-ORG/YOUR-REPO/commit/a1b2c3d)
-- a range:
-  [`a1b2c3d...e4f5a6b`](https://github.com/YOUR-ORG/YOUR-REPO/compare/a1b2c3d...e4f5a6b)
+- Student ID → get-or-create plan:
+  [`d22c547...ed47b0f`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit7-adam2221114/compare/d22c547...ed47b0f)
+- Planned courses (add/remove/persist/duplicate-prevent):
+  [`120713b...882053c`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit7-adam2221114/compare/120713b...882053c)
+- Derived (not stored) semester unit totals:
+  [`d17eac5`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit7-adam2221114/commit/d17eac5),
+  tested in [`bf975f8`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit7-adam2221114/commit/bf975f8)
+- Retiring the starter guestbook once the planner had its own routes and
+  pages, rather than building the planner next to unused demo code:
+  [`7b7e45b`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit7-adam2221114/commit/7b7e45b)
+- Student ID entry page and the plan page itself, wired to the routes above
+  with a plain POST + redirect + one-time flash message — no client-side JS
+  needed for any mutation:
+  [`8ad7a37`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit7-adam2221114/commit/8ad7a37),
+  [`a7accd3`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit7-adam2221114/commit/a7accd3)
+- A first pass at prerequisites (schema, validation, UI, tests):
+  [`4c20996...993ccd8`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit7-adam2221114/compare/4c20996...993ccd8)
 
-To pair a prompt with the commit it produced, quote the prompt (curated, not a
-full transcript) next to the citation:
+At each step: implement, run the relevant spec file, run `pnpm check`,
+actually load the page (or curl the route) and look at it, then commit.
+`pnpm check` stayed green throughout.
 
-> the prompt, verbatim
+### The undergraduate-to-postgraduate pivot
 
-Screenshots are welcome where one carries the point better than a sentence does.
-Commit the file to this repo and link it with a **relative** path, which is what
-makes it render on GitHub: `![alt text](docs/before.png)`. Images don't count
-towards the word count and don't replace the citation.
+The first course catalogue was a plausible-looking but partly invented set
+of undergraduate COMP1xxx-style courses. Before extending prerequisites
+further I asked myself whether that catalogue represented a real ANU
+program, and it didn't cleanly — codes and requisite text were approximate,
+not sourced. CLAUDE.md is explicit that the catalogue should be
+"representative" demonstration data, but representative still means real: I
+decided to replace it with a genuinely sourced catalogue rather than keep
+polishing invented data, and confirmed the direction (program = Master of
+Computing 7706XMCOMP, specialisation = Software Development, year = 2026)
+before touching code, since CLAUDE.md also says not to expand scope without
+asking.
+
+Sourcing it directly from ANU surfaced a real gotcha worth recording: a
+Programs & Courses *program requirements* page conflated two similarly-coded
+courses, reporting COMP7710 as "Structured Programming (12 units)" when
+COMP7710's own course page says **Programming Fundamentals**, and the
+6-unit **Structured Programming** is actually COMP6710 — a different course,
+incompatible with COMP7710. Cross-checking every course against its own
+individual course page (not the aggregated program page) caught this before
+it made it into the seed data, and COMP6710 was dropped from the catalogue
+entirely since it's incompatible with the compulsory COMP7710.
+
+Real ANU prerequisites don't reduce to a single chain: some courses need one
+of several alternative courses (OR), others need multiple independent
+requirements at once (AND), and some "requirements" are actually about
+program enrolment rather than any other course at all (e.g. COMP8280 and
+ENGN8100 require being enrolled in a specific ANU program, not having
+completed a course — that's not something this schema can express, so it's
+just not enforced). I modeled this with a `groupId` column on
+`coursePrerequisites`: rows sharing a `groupId` are OR alternatives, and
+distinct groups are AND'd together. Verbatim ANU requisite/incompatibility
+text is stored separately (`requisiteText`) and shown in the UI even where
+the underlying rule can't be enforced, so the prototype doesn't silently
+misrepresent a course as prerequisite-free just because part of its real
+requirement isn't expressible.
+
+One consequence of using real data: COMP8410's real prerequisite is two AND
+groups, and every alternative in its second group (COMP6710, COMP6730,
+COMP7230) sits outside this catalogue. Enforcing an unsatisfiable group
+would make COMP8410 permanently unaddable, which is worse than the honest
+alternative — that group is treated as informational-only (visible in
+`requisiteText`, not enforced), while its first group (COMP6240) is still
+enforced normally.
+
+I also added a lightweight "previously completed" concept, deliberately
+short of a full academic-history feature: a course can be marked completed
+against a plan, independent of any semester, and that satisfies a
+prerequisite the same way planning it in an earlier semester would. This
+turned out to be necessary rather than a nice-to-have: COMP6260 is only
+offered in Semester 2 in 2026, so a course that needs it as a prerequisite
+(COMP6442) can never be satisfied by Semester 1 → Semester 2 sequencing
+within one modeled year — previously-completed is the only way to plan
+COMP6442 at all with this constraint respected honestly. A course can't be
+both planned and previously-completed at once (enforced with a clear error
+in both directions), and same-semester prerequisites don't count — only
+strictly-earlier semesters or previously-completed does.
+
+Implementation landed as four commits, each independently green under
+`pnpm check`:
+
+- [`54acd19`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit7-adam2221114/commit/54acd19)
+  — replace the seed data and rewrite prerequisite/previously-completed
+  logic in `db.ts`
+- [`925a352`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit7-adam2221114/commit/925a352)
+  — API routes for marking/unmarking a course previously completed
+- [`8e0391c`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit7-adam2221114/commit/8e0391c)
+  — UI: previously-completed section, requisite-text column, and a
+  disclaimer that this is a planning prototype, not an authoritative ANU
+  enrolment system
+- [`e85d303`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit7-adam2221114/commit/e85d303)
+  — rewrite prerequisite/total/planned-course tests, which had been
+  quietly coupled to the old catalogue's ordering and uniform 6-unit
+  courses
+
+Before committing, I self-reviewed the new prerequisite spec and caught two
+bugs in my own draft: it used a course with its own unsatisfied
+prerequisites as a stand-in "simple prerequisite" in three basic tests
+(which would have failed for the wrong reason), and an OR-group test never
+actually exercised the success path. Both were rewritten before the tests
+were run for real, and I then verified the whole flow again by hand against
+the built server — adding a prerequisite-free course, being correctly
+rejected for a missing prerequisite, marking a course previously completed,
+hitting the mutual-exclusivity conflict in both directions, and reloading
+the page to confirm all of that survived — rather than trusting the
+automated suite alone for a feature this central to the brief.
 
 ## Before you ship
 
