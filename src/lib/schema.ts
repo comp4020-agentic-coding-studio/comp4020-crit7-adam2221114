@@ -37,13 +37,18 @@ export const semesterPlans = sqliteTable("semester_plans", {
 export type SemesterPlan = typeof semesterPlans.$inferSelect;
 
 // A small demonstration catalogue, not the authoritative ANU course list.
-// offeredSemester is "1", "2", or "Both".
+// offeredSemester is "1", "2", or "Both". requisiteText is the official ANU
+// requisite/incompatibility wording, stored so the UI can show it verbatim
+// instead of the app inventing its own paraphrase — separate from
+// coursePrerequisites below, which is only the subset of that wording this
+// prototype actually enforces.
 export const courses = sqliteTable("courses", {
   id: int().primaryKey({ autoIncrement: true }),
   code: text().notNull().unique(),
   name: text().notNull(),
   units: int().notNull(),
   offeredSemester: text("offered_semester").notNull(),
+  requisiteText: text("requisite_text"),
 });
 
 export type Course = typeof courses.$inferSelect;
@@ -71,10 +76,13 @@ export const plannedCourses = sqliteTable(
 
 export type PlannedCourse = typeof plannedCourses.$inferSelect;
 
-// A simple prerequisite relation between two demo courses: a row means
-// courseId requires prerequisiteCourseId. Deliberately flat — no chained
-// resolution, no boolean AND/OR groups, no "N of these" rules. The unique
-// index prevents seeding (or adding) the same pair twice.
+// A prerequisite relation between two demo courses: a row means courseId
+// requires prerequisiteCourseId, grouped by groupId. Rows sharing
+// (courseId, groupId) are alternatives — any one of them satisfies that
+// group ("one of A, B, C"); rows in different groups are all required
+// together ("group 1 AND group 2"), which is how ANU's own requisite text
+// is actually structured. The unique index prevents seeding (or adding) the
+// same pair twice.
 export const coursePrerequisites = sqliteTable(
   "course_prerequisites",
   {
@@ -85,6 +93,7 @@ export const coursePrerequisites = sqliteTable(
     prerequisiteCourseId: int("prerequisite_course_id")
       .notNull()
       .references(() => courses.id),
+    groupId: int("group_id").notNull().default(0),
   },
   (table) => [
     uniqueIndex("course_prerequisites_unique").on(table.courseId, table.prerequisiteCourseId),
@@ -92,3 +101,28 @@ export const coursePrerequisites = sqliteTable(
 );
 
 export type CoursePrerequisite = typeof coursePrerequisites.$inferSelect;
+
+// A course the student says they've already completed outside this plan —
+// the lightweight alternative to a full academic-history feature. A course
+// can be previously completed OR planned in this plan, never both (enforced
+// in src/lib/db.ts), and either one can satisfy a prerequisite group.
+export const previouslyCompletedCourses = sqliteTable(
+  "previously_completed_courses",
+  {
+    id: int().primaryKey({ autoIncrement: true }),
+    planId: int("plan_id")
+      .notNull()
+      .references(() => semesterPlans.id),
+    courseId: int("course_id")
+      .notNull()
+      .references(() => courses.id),
+  },
+  (table) => [
+    uniqueIndex("previously_completed_courses_plan_course_unique").on(
+      table.planId,
+      table.courseId,
+    ),
+  ],
+);
+
+export type PreviouslyCompletedCourse = typeof previouslyCompletedCourses.$inferSelect;
