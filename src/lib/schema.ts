@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { check, int, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 // The schema is the ground truth for the database. To change it: edit here,
 // run `pnpm db:generate` to turn the diff into a migration under drizzle/,
@@ -56,3 +56,26 @@ export const courses = sqliteTable("courses", {
 });
 
 export type Course = typeof courses.$inferSelect;
+
+// Joins a course to a semester within one plan. The unique index prevents
+// adding the same course to the same plan twice (in either semester); the
+// check constraint keeps semester to 1 or 2 at the database level too.
+export const plannedCourses = sqliteTable(
+  "planned_courses",
+  {
+    id: int().primaryKey({ autoIncrement: true }),
+    planId: int("plan_id")
+      .notNull()
+      .references(() => semesterPlans.id),
+    courseId: int("course_id")
+      .notNull()
+      .references(() => courses.id),
+    semester: int().notNull(),
+  },
+  (table) => [
+    uniqueIndex("planned_courses_plan_course_unique").on(table.planId, table.courseId),
+    check("planned_courses_semester_check", sql`${table.semester} in (1, 2)`),
+  ],
+);
+
+export type PlannedCourse = typeof plannedCourses.$inferSelect;

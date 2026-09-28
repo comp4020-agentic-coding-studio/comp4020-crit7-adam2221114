@@ -22,6 +22,13 @@
       "when": 1790596154843,
       "tag": "0002_pink_shotgun",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1790596589167,
+      "tag": "0003_freezing_magik",
+      "breakpoints": true
     }
   ]
 }
