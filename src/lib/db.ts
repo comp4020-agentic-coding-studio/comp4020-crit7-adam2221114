@@ -1,14 +1,12 @@
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import Database from "better-sqlite3";
-import { and, desc, eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import {
   type Course,
   courses,
-  type Message,
-  messages,
   type PlannedCourse,
   plannedCourses,
   type SemesterPlan,
@@ -71,7 +69,7 @@ function seedCourses(): void {
 }
 seedCourses();
 
-export type { Course, Message, PlannedCourse, SemesterPlan };
+export type { Course, PlannedCourse, SemesterPlan };
 
 // Thrown when a course is already in a plan — the caller (the API route)
 // decides what HTTP status that becomes.
@@ -83,14 +81,6 @@ function isUniqueConstraintError(err: unknown): boolean {
 
 export function listCourses(): Course[] {
   return db.select().from(courses).orderBy(courses.code).all();
-}
-
-export function listMessages(): Message[] {
-  return db.select().from(messages).orderBy(desc(messages.id)).limit(50).all();
-}
-
-export function addMessage(body: string): Message {
-  return db.insert(messages).values({ body }).returning().get();
 }
 
 // One active plan per Student ID: return it if it exists, otherwise create
