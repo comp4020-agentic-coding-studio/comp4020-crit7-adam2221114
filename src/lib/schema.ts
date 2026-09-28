@@ -70,3 +70,25 @@ export const plannedCourses = sqliteTable(
 );
 
 export type PlannedCourse = typeof plannedCourses.$inferSelect;
+
+// A simple prerequisite relation between two demo courses: a row means
+// courseId requires prerequisiteCourseId. Deliberately flat — no chained
+// resolution, no boolean AND/OR groups, no "N of these" rules. The unique
+// index prevents seeding (or adding) the same pair twice.
+export const coursePrerequisites = sqliteTable(
+  "course_prerequisites",
+  {
+    id: int().primaryKey({ autoIncrement: true }),
+    courseId: int("course_id")
+      .notNull()
+      .references(() => courses.id),
+    prerequisiteCourseId: int("prerequisite_course_id")
+      .notNull()
+      .references(() => courses.id),
+  },
+  (table) => [
+    uniqueIndex("course_prerequisites_unique").on(table.courseId, table.prerequisiteCourseId),
+  ],
+);
+
+export type CoursePrerequisite = typeof coursePrerequisites.$inferSelect;

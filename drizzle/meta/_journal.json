@@ -36,6 +36,13 @@
       "when": 1790597348310,
       "tag": "0004_robust_tyger_tiger",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1790597850551,
+      "tag": "0005_crazy_quasar",
+      "breakpoints": true
     }
   ]
 }
