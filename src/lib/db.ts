@@ -4,7 +4,15 @@ import Database from "better-sqlite3";
 import { desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
-import { type Message, messages, type SemesterPlan, semesterPlans, students } from "./schema";
+import {
+  type Course,
+  courses,
+  type Message,
+  messages,
+  type SemesterPlan,
+  semesterPlans,
+  students,
+} from "./schema";
 
 // One SQLite file is the app's whole persistent state. In production
 // fly.toml points DATABASE_PATH at the machine's volume (/data), which is
@@ -24,7 +32,48 @@ export const db = drizzle(client);
 // commit the migration it writes to drizzle/.
 migrate(db, { migrationsFolder: "./drizzle" });
 
-export type { Message, SemesterPlan };
+// A small demonstration catalogue (not the authoritative ANU course list —
+// see CLAUDE.md). Seeded once: if the table already has rows, boot leaves
+// it alone, so a redeploy never duplicates or resets the catalogue.
+const SEED_COURSES: (typeof courses.$inferInsert)[] = [
+  { code: "COMP1010", name: "Foundations of Computing", units: 6, offeredSemester: "1" },
+  {
+    code: "COMP1100",
+    name: "Introduction to Programming and Algorithms",
+    units: 6,
+    offeredSemester: "1",
+  },
+  { code: "COMP1110", name: "Structured Programming", units: 6, offeredSemester: "2" },
+  { code: "COMP2100", name: "Software Design Methodologies", units: 6, offeredSemester: "1" },
+  { code: "COMP2120", name: "Algorithms and Data Structures", units: 6, offeredSemester: "2" },
+  {
+    code: "COMP2300",
+    name: "Computer Organisation and Program Execution",
+    units: 6,
+    offeredSemester: "Both",
+  },
+  {
+    code: "COMP2600",
+    name: "Formal Methods for Software Engineering",
+    units: 6,
+    offeredSemester: "2",
+  },
+  { code: "COMP3120", name: "Software Project Management", units: 6, offeredSemester: "1" },
+  { code: "COMP3600", name: "Algorithms", units: 6, offeredSemester: "1" },
+  { code: "COMP4610", name: "Human Computer Interaction", units: 6, offeredSemester: "2" },
+];
+
+function seedCourses(): void {
+  if (db.select().from(courses).limit(1).get()) return;
+  db.insert(courses).values(SEED_COURSES).run();
+}
+seedCourses();
+
+export type { Course, Message, SemesterPlan };
+
+export function listCourses(): Course[] {
+  return db.select().from(courses).orderBy(courses.code).all();
+}
 
 export function listMessages(): Message[] {
   return db.select().from(messages).orderBy(desc(messages.id)).limit(50).all();
