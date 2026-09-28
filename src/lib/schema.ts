@@ -16,3 +16,31 @@ export const messages = sqliteTable("messages", {
 });
 
 export type Message = typeof messages.$inferSelect;
+
+// One row per Student ID that has ever asked for a plan. Student ID is a
+// plain identifier for this prototype, not authentication.
+export const students = sqliteTable("students", {
+  id: int().primaryKey({ autoIncrement: true }),
+  studentId: text("student_id").notNull().unique(),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`(datetime('now'))`),
+});
+
+// One active plan per Student ID (enforced by the unique constraint below).
+export const semesterPlans = sqliteTable("semester_plans", {
+  id: int().primaryKey({ autoIncrement: true }),
+  studentId: text("student_id")
+    .notNull()
+    .unique()
+    .references(() => students.studentId),
+  year: int().notNull(),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`(datetime('now'))`),
+  updatedAt: text("updated_at")
+    .notNull()
+    .default(sql`(datetime('now'))`),
+});
+
+export type SemesterPlan = typeof semesterPlans.$inferSelect;
