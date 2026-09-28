@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import {
   addPlannedCourse,
+  CourseAlreadyCompletedError,
   DuplicatePlannedCourseError,
   listPlannedCourses,
   PrerequisiteNotSatisfiedError,
@@ -39,9 +40,15 @@ export const POST: APIRoute = async ({ params, request }) => {
     if (err instanceof DuplicatePlannedCourseError) {
       return Response.json({ error: err.message }, { status: 409 });
     }
+    if (err instanceof CourseAlreadyCompletedError) {
+      return Response.json({ error: err.message }, { status: 409 });
+    }
     if (err instanceof PrerequisiteNotSatisfiedError) {
       return Response.json(
-        { error: err.message, missing: err.missing.map((course) => course.code) },
+        {
+          error: err.message,
+          missing: err.missingGroups.map((group) => group.map((course) => course.code)),
+        },
         { status: 422 },
       );
     }
