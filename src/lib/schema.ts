@@ -44,3 +44,15 @@ export const semesterPlans = sqliteTable("semester_plans", {
 });
 
 export type SemesterPlan = typeof semesterPlans.$inferSelect;
+
+// A small demonstration catalogue, not the authoritative ANU course list.
+// offeredSemester is "1", "2", or "Both".
+export const courses = sqliteTable("courses", {
+  id: int().primaryKey({ autoIncrement: true }),
+  code: text().notNull().unique(),
+  name: text().notNull(),
+  units: int().notNull(),
+  offeredSemester: text("offered_semester").notNull(),
+});
+
+export type Course = typeof courses.$inferSelect;
