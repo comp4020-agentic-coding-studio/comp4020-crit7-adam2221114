@@ -6,6 +6,7 @@ import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import {
   type Course,
+  coursePrerequisites,
   courses,
   type PlannedCourse,
   plannedCourses,
@@ -69,11 +70,54 @@ function seedCourses(): void {
 }
 seedCourses();
 
+// A small set of prerequisite pairs among the demo courses (child requires
+// parent) — enough to demonstrate the validation, not a real degree's
+// prerequisite chain. Seeded once, same idempotent pattern as the courses
+// themselves.
+const SEED_PREREQUISITES: [child: string, parent: string][] = [
+  ["COMP2100", "COMP1100"],
+  ["COMP2120", "COMP1100"],
+  ["COMP2600", "COMP1100"],
+  ["COMP2300", "COMP1010"],
+  ["COMP3120", "COMP2100"],
+  ["COMP3600", "COMP2120"],
+  ["COMP4610", "COMP2100"],
+];
+
+function seedPrerequisites(): void {
+  if (db.select().from(coursePrerequisites).limit(1).get()) return;
+  const idByCode = new Map(
+    db
+      .select({ code: courses.code, id: courses.id })
+      .from(courses)
+      .all()
+      .map((course) => [course.code, course.id]),
+  );
+  const rows = SEED_PREREQUISITES.map(([child, parent]) => ({
+    courseId: idByCode.get(child) as number,
+    prerequisiteCourseId: idByCode.get(parent) as number,
+  }));
+  db.insert(coursePrerequisites).values(rows).run();
+}
+seedPrerequisites();
+
 export type { Course, PlannedCourse, SemesterPlan };
 
 // Thrown when a course is already in a plan — the caller (the API route)
 // decides what HTTP status that becomes.
 export class DuplicatePlannedCourseError extends Error {}
+
+// Thrown when a course's prerequisite isn't yet planned in an earlier
+// semester of the same plan. `missing` is every unsatisfied prerequisite, so
+// the caller can name them in the message it shows a student.
+export class PrerequisiteNotSatisfiedError extends Error {
+  constructor(
+    public readonly missing: Course[],
+    message: string,
+  ) {
+    super(message);
+  }
+}
 
 function isUniqueConstraintError(err: unknown): boolean {
   return err instanceof Error && "code" in err && err.code === "SQLITE_CONSTRAINT_UNIQUE";
@@ -81,6 +125,50 @@ function isUniqueConstraintError(err: unknown): boolean {
 
 export function listCourses(): Course[] {
   return db.select().from(courses).orderBy(courses.code).all();
+}
+
+// The prerequisite courses of one course (empty if it has none).
+export function listPrerequisitesFor(courseId: number): Course[] {
+  return db
+    .select({
+      id: courses.id,
+      code: courses.code,
+      name: courses.name,
+      units: courses.units,
+      offeredSemester: courses.offeredSemester,
+    })
+    .from(coursePrerequisites)
+    .innerJoin(courses, eq(coursePrerequisites.prerequisiteCourseId, courses.id))
+    .where(eq(coursePrerequisites.courseId, courseId))
+    .all();
+}
+
+// The whole catalogue, each course carrying its prerequisites — what the
+// planner UI needs to explain why an add might be rejected before the
+// student even tries it.
+export function listCoursesWithPrerequisites(): (Course & { prerequisites: Course[] })[] {
+  return listCourses().map((course) => ({
+    ...course,
+    prerequisites: listPrerequisitesFor(course.id),
+  }));
+}
+
+// A course with any prerequisite can only ever go in Semester 2: Semester 1
+// has no earlier semester within a plan for that prerequisite to have been
+// satisfied in. For Semester 2, every prerequisite must already be planned
+// in Semester 1 of the same plan. Returns the still-missing prerequisites
+// (empty means the course can be added).
+function missingPrerequisites(planId: number, courseId: number, semester: number): Course[] {
+  const prerequisites = listPrerequisitesFor(courseId);
+  if (prerequisites.length === 0) return [];
+  if (semester === 1) return prerequisites;
+
+  const semester1CourseIds = new Set(
+    listPlannedCourses(planId)
+      .filter((planned) => planned.semester === 1)
+      .map((planned) => planned.courseId),
+  );
+  return prerequisites.filter((prerequisite) => !semester1CourseIds.has(prerequisite.id));
 }
 
 // One active plan per Student ID: return it if it exists, otherwise create
@@ -104,9 +192,11 @@ export function getOrCreatePlan(studentId: string): SemesterPlan {
 }
 
 // Adds a course to a plan's semester. Semester must be 1 or 2 (also
-// enforced by a check constraint in the schema); a course already in the
-// plan (in either semester) raises DuplicatePlannedCourseError instead of
-// creating a second row.
+// enforced by a check constraint in the schema); a course whose
+// prerequisites aren't yet planned in an earlier semester of this plan
+// raises PrerequisiteNotSatisfiedError, and a course already in the plan (in
+// either semester) raises DuplicatePlannedCourseError instead of creating a
+// second row.
 export function addPlannedCourse(
   planId: number,
   courseId: number,
@@ -114,6 +204,13 @@ export function addPlannedCourse(
 ): PlannedCourse {
   if (semester !== 1 && semester !== 2) {
     throw new RangeError("semester must be 1 or 2");
+  }
+  const missing = missingPrerequisites(planId, courseId, semester);
+  if (missing.length > 0) {
+    throw new PrerequisiteNotSatisfiedError(
+      missing,
+      `requires ${missing.map((course) => course.code).join(", ")} to be planned in Semester 1 first`,
+    );
   }
   try {
     return db.insert(plannedCourses).values({ planId, courseId, semester }).returning().get();

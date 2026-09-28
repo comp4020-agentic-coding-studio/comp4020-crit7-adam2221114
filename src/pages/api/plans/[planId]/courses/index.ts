@@ -1,5 +1,10 @@
 import type { APIRoute } from "astro";
-import { addPlannedCourse, DuplicatePlannedCourseError, listPlannedCourses } from "../../../../../lib/db";
+import {
+  addPlannedCourse,
+  DuplicatePlannedCourseError,
+  listPlannedCourses,
+  PrerequisiteNotSatisfiedError,
+} from "../../../../../lib/db";
 
 // The planned courses for one plan: list them, or add one to a semester.
 // Scoped entirely by planId in the URL, so one student's plan can't affect
@@ -33,6 +38,12 @@ export const POST: APIRoute = async ({ params, request }) => {
   } catch (err) {
     if (err instanceof DuplicatePlannedCourseError) {
       return Response.json({ error: err.message }, { status: 409 });
+    }
+    if (err instanceof PrerequisiteNotSatisfiedError) {
+      return Response.json(
+        { error: err.message, missing: err.missing.map((course) => course.code) },
+        { status: 422 },
+      );
     }
     throw err;
   }
