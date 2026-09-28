@@ -35,6 +35,94 @@ button {
   font: inherit;
 }
 
-#messages {
-  padding-inline-start: 1.2rem;
+main {
+  max-width: 60rem;
+}
+
+.note {
+  color: #444;
+}
+
+.status {
+  padding: 0.6rem 0.8rem;
+  border-radius: 0.3rem;
+  font-weight: 600;
+}
+
+.status-ok {
+  background: #e6f4ea;
+  color: #1a7f37;
+}
+
+.status-error {
+  background: #fdecea;
+  color: #b3261e;
+}
+
+.semesters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 1.5rem;
+  margin-block-end: 2rem;
+}
+
+.units-total {
+  font-weight: 600;
+}
+
+.empty {
+  color: #444;
+  font-style: italic;
+}
+
+.planned-list {
+  list-style: none;
+  padding-inline-start: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.planned-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 0.3rem;
+}
+
+.planned-list form {
+  margin: 0;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 0.5rem;
+  border-bottom: 1px solid #ddd;
+  vertical-align: middle;
+}
+
+.add-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0;
+}
+
+.in-plan {
+  color: #1a7f37;
+  font-weight: 600;
 }

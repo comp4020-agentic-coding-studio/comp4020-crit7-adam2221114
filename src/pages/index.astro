@@ -1,8 +1,21 @@
 ---
-import { listMessages } from "../lib/db";
 import "../styles.css";
 
-const messages = listMessages();
+// Landing page: the one thing a student does before anything else in the
+// core flow (see CLAUDE.md) — enter a Student ID. The POST here doesn't
+// touch the database itself; it just normalises the id and hands off to
+// /plan/[studentId], which is the single place get-or-create happens (on
+// GET, so a bookmarked or refreshed plan URL behaves the same way).
+let error: string | null = null;
+
+if (Astro.request.method === "POST") {
+  const form = await Astro.request.formData();
+  const studentId = String(form.get("studentId") ?? "").trim();
+  if (studentId) {
+    return Astro.redirect(`/plan/${encodeURIComponent(studentId.slice(0, 100))}`, 303);
+  }
+  error = "Enter a Student ID to continue.";
+}
 ---
 
 <!doctype html>
@@ -10,44 +23,34 @@ const messages = listMessages();
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>COMP4020 prototype</title>
+    <title>ANU Semester Planner</title>
   </head>
   <body>
     <nav aria-label="site">
-      <a href="/">Guestbook</a>
+      <a href="/">Planner</a>
       <a href="/readme/">About</a>
     </nav>
     <main>
-      <h1>Guestbook</h1>
+      <h1>ANU Semester Planner</h1>
       <p>
-        A minimal full-stack starter: messages live in SQLite on the machine's
-        volume (state survives a reload and a redeploy), and new messages
-        appear in every open tab over a server-sent-events stream — open this
-        page twice and sign it in one. Replace all of this with your own
-        prototype.
+        Enter your Student ID to open your semester plan. If you don't have one
+        yet, we'll create it — the same Student ID always returns to the same
+        plan.
       </p>
-      <form method="post" action="/api/messages">
-        <label for="body">Leave a message</label>
-        <input id="body" name="body" required maxlength="500" />
-        <button>Sign</button>
+      <form method="post">
+        <label for="studentId">Student ID</label>
+        <input id="studentId" name="studentId" required maxlength="100" autocomplete="off" />
+        <button>Open my plan</button>
       </form>
-      <ul id="messages">
-        {messages.map((message) => <li>{message.body}</li>)}
-      </ul>
+      {error && (
+        <p role="alert" class="status status-error">
+          {error}
+        </p>
+      )}
+      <p class="note">
+        Student ID is just an identifier for this prototype — it is not a
+        password, and there is no login.
+      </p>
     </main>
-    <script>
-      // The live half of the demo: subscribe to the SSE stream and prepend
-      // messages as they arrive. The form itself needs none of this — its
-      // POST + redirect re-renders the submitting tab from SQLite; this
-      // stream is how every other tab finds out.
-      const list = document.querySelector("#messages");
-      const source = new EventSource("/api/events");
-      source.addEventListener("message", (event) => {
-        const message = JSON.parse(event.data);
-        const item = document.createElement("li");
-        item.textContent = message.body;
-        list?.prepend(item);
-      });
-    </script>
   </body>
 </html>
