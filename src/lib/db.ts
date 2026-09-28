@@ -10,6 +10,8 @@ import {
   courses,
   type PlannedCourse,
   plannedCourses,
+  type PreviouslyCompletedCourse,
+  previouslyCompletedCourses,
   type SemesterPlan,
   semesterPlans,
   students,
@@ -34,34 +36,95 @@ export const db = drizzle(client);
 migrate(db, { migrationsFolder: "./drizzle" });
 
 // A small demonstration catalogue (not the authoritative ANU course list —
-// see CLAUDE.md). Seeded once: if the table already has rows, boot leaves
-// it alone, so a redeploy never duplicates or resets the catalogue.
+// see CLAUDE.md), drawn from the real 2026 Master of Computing (7706XMCOMP)
+// core and its Software Development specialisation, verified against each
+// course's own page on ANU Programs & Courses. requisiteText is the official
+// wording verbatim; coursePrerequisites below only encodes the subset of it
+// this prototype can actually enforce (a course requirement that names a
+// course outside this catalogue, or a program-enrolment condition, has no
+// row there and is informational only). Seeded once: if the table already
+// has rows, boot leaves it alone, so a redeploy never duplicates or resets
+// the catalogue.
 const SEED_COURSES: (typeof courses.$inferInsert)[] = [
-  { code: "COMP1010", name: "Foundations of Computing", units: 6, offeredSemester: "1" },
   {
-    code: "COMP1100",
-    name: "Introduction to Programming and Algorithms",
-    units: 6,
-    offeredSemester: "1",
-  },
-  { code: "COMP1110", name: "Structured Programming", units: 6, offeredSemester: "2" },
-  { code: "COMP2100", name: "Software Design Methodologies", units: 6, offeredSemester: "1" },
-  { code: "COMP2120", name: "Algorithms and Data Structures", units: 6, offeredSemester: "2" },
-  {
-    code: "COMP2300",
-    name: "Computer Organisation and Program Execution",
-    units: 6,
-    offeredSemester: "Both",
-  },
-  {
-    code: "COMP2600",
-    name: "Formal Methods for Software Engineering",
+    code: "COMP6120",
+    name: "Software Engineering",
     units: 6,
     offeredSemester: "2",
+    requisiteText:
+      "You must have successfully completed or be currently studying COMP6442 or COMP2100. Incompatible with COMP2120.",
   },
-  { code: "COMP3120", name: "Software Project Management", units: 6, offeredSemester: "1" },
-  { code: "COMP3600", name: "Algorithms", units: 6, offeredSemester: "1" },
-  { code: "COMP4610", name: "Human Computer Interaction", units: 6, offeredSemester: "2" },
+  {
+    code: "COMP6442",
+    name: "Software Construction",
+    units: 6,
+    offeredSemester: "Both",
+    requisiteText:
+      "You must have completed COMP6710 or COMP7710 or COMP1110 or COMP1140, and have completed or be currently enrolled in MATH6005 or COMP6260 or MATH1005 (or be enrolled in the Master of Computing (Advanced)). Incompatible with COMP2100.",
+  },
+  {
+    code: "COMP7710",
+    name: "Programming Fundamentals",
+    units: 12,
+    offeredSemester: "Both",
+    requisiteText:
+      "Incompatible with COMP1110 or COMP1140 or COMP6710. Enrolment requires a permission code from the School of Computing.",
+  },
+  {
+    code: "COMP8280",
+    name: "Responsible Practice, Innovation and Leadership",
+    units: 6,
+    offeredSemester: "Both",
+    requisiteText:
+      "You must be enrolled in the Graduate Diploma of Computing, Master of Computing, Master of Computing (Advanced) or Master of Machine Learning and Computer Vision. Incompatible with COMP8260, ENGN8260 and ENGN8280.",
+  },
+  {
+    code: "COMP6260",
+    name: "Foundations of Computing",
+    units: 6,
+    offeredSemester: "2",
+    requisiteText: "Incompatible with COMP1600.",
+  },
+  {
+    code: "ENGN8100",
+    name: "Introduction to Systems Engineering",
+    units: 6,
+    offeredSemester: "1",
+    requisiteText:
+      "You must be studying Master of Engineering, Master of Computing, Master of Computing (Advanced), Master of Project Management, Master of Business Information Systems or Graduate Certificate in Nuclear Technology and Regulation.",
+  },
+  {
+    code: "COMP8410",
+    name: "Data Mining",
+    units: 6,
+    offeredSemester: "1",
+    requisiteText:
+      "You must have completed COMP7240 or COMP6240 or COMP2400, and COMP6730 or COMP7230 or COMP6710. Incompatible with COMP3420, COMP3425, COMP8400 and COMP8910.",
+  },
+  {
+    code: "COMP6240",
+    name: "Relational Databases",
+    units: 6,
+    offeredSemester: "Both",
+    requisiteText:
+      "You are not able to enrol in this course if you have successfully completed COMP2400. Incompatible with COMP7240.",
+  },
+  {
+    code: "COMP6331",
+    name: "Computer Networks",
+    units: 6,
+    offeredSemester: "1",
+    requisiteText:
+      "You must have completed (COMP6710 or COMP7710 or COMP1110 or COMP1140) or (COMP6310 or COMP2310) or (COMP6442 or COMP2100). Incompatible with COMP3310, ENGN3539 and ENGN6539.",
+  },
+  {
+    code: "COMP6390",
+    name: "Human-Computer Interaction",
+    units: 6,
+    offeredSemester: "2",
+    requisiteText:
+      "You must be studying Master of Computing or Master of Computing (Advanced), or have completed 6 units of COMP6442, COMP6710 or COMP6720. Incompatible with COMP3900.",
+  },
 ];
 
 function seedCourses(): void {
@@ -70,18 +133,21 @@ function seedCourses(): void {
 }
 seedCourses();
 
-// A small set of prerequisite pairs among the demo courses (child requires
-// parent) — enough to demonstrate the validation, not a real degree's
-// prerequisite chain. Seeded once, same idempotent pattern as the courses
-// themselves.
-const SEED_PREREQUISITES: [child: string, parent: string][] = [
-  ["COMP2100", "COMP1100"],
-  ["COMP2120", "COMP1100"],
-  ["COMP2600", "COMP1100"],
-  ["COMP2300", "COMP1010"],
-  ["COMP3120", "COMP2100"],
-  ["COMP3600", "COMP2120"],
-  ["COMP4610", "COMP2100"],
+// The prerequisite relationships this prototype enforces, trimmed to what's
+// actually representable within the catalogue above — real ANU requisites
+// that name a course outside it are left out here (they still show up in
+// requisiteText, informationally). Rows sharing (child, groupId) are
+// alternatives, "one of these satisfies the group"; a course with rows in
+// more than one group needs every group satisfied. COMP6442 mirrors ANU's
+// real "intro programming AND discrete maths" structure; COMP6331 mirrors
+// ANU's real "any one of three independent paths" structure.
+const SEED_PREREQUISITES: [child: string, groupId: number, parent: string][] = [
+  ["COMP6120", 1, "COMP6442"],
+  ["COMP6442", 1, "COMP7710"],
+  ["COMP6442", 2, "COMP6260"],
+  ["COMP8410", 1, "COMP6240"],
+  ["COMP6331", 1, "COMP7710"],
+  ["COMP6331", 1, "COMP6442"],
 ];
 
 function seedPrerequisites(): void {
@@ -93,26 +159,37 @@ function seedPrerequisites(): void {
       .all()
       .map((course) => [course.code, course.id]),
   );
-  const rows = SEED_PREREQUISITES.map(([child, parent]) => ({
+  const rows = SEED_PREREQUISITES.map(([child, groupId, parent]) => ({
     courseId: idByCode.get(child) as number,
+    groupId,
     prerequisiteCourseId: idByCode.get(parent) as number,
   }));
   db.insert(coursePrerequisites).values(rows).run();
 }
 seedPrerequisites();
 
-export type { Course, PlannedCourse, SemesterPlan };
+export type { Course, PlannedCourse, PreviouslyCompletedCourse, SemesterPlan };
 
 // Thrown when a course is already in a plan — the caller (the API route)
 // decides what HTTP status that becomes.
 export class DuplicatePlannedCourseError extends Error {}
 
-// Thrown when a course's prerequisite isn't yet planned in an earlier
-// semester of the same plan. `missing` is every unsatisfied prerequisite, so
-// the caller can name them in the message it shows a student.
+// Thrown when a course is already marked previously completed for a plan.
+export class DuplicateCompletedCourseError extends Error {}
+
+// Thrown when trying to plan a course that's already marked previously
+// completed for this plan, or vice versa — a course can only be one or the
+// other, never both.
+export class CourseAlreadyCompletedError extends Error {}
+export class CourseAlreadyPlannedError extends Error {}
+
+// Thrown when a course's prerequisite groups aren't all satisfied yet.
+// `missingGroups` is every unsatisfied group (each an array of alternative
+// courses, any one of which would satisfy it), so the caller can explain
+// exactly what's missing to a student.
 export class PrerequisiteNotSatisfiedError extends Error {
   constructor(
-    public readonly missing: Course[],
+    public readonly missingGroups: Course[][],
     message: string,
   ) {
     super(message);
@@ -127,48 +204,114 @@ export function listCourses(): Course[] {
   return db.select().from(courses).orderBy(courses.code).all();
 }
 
-// The prerequisite courses of one course (empty if it has none).
-export function listPrerequisitesFor(courseId: number): Course[] {
-  return db
-    .select({
-      id: courses.id,
-      code: courses.code,
-      name: courses.name,
-      units: courses.units,
-      offeredSemester: courses.offeredSemester,
-    })
+// The prerequisite groups of one course (empty if it has none). Courses
+// sharing a groupId are alternatives; every group returned must have at
+// least one satisfied member for the course to be addable.
+export function listPrerequisiteGroupsFor(courseId: number): Course[][] {
+  const rows = db
+    .select({ groupId: coursePrerequisites.groupId, course: courses })
     .from(coursePrerequisites)
     .innerJoin(courses, eq(coursePrerequisites.prerequisiteCourseId, courses.id))
     .where(eq(coursePrerequisites.courseId, courseId))
     .all();
+
+  const byGroup = new Map<number, Course[]>();
+  for (const row of rows) {
+    const group = byGroup.get(row.groupId) ?? [];
+    group.push(row.course);
+    byGroup.set(row.groupId, group);
+  }
+  return [...byGroup.values()];
 }
 
-// The whole catalogue, each course carrying its prerequisites — what the
-// planner UI needs to explain why an add might be rejected before the
+// The whole catalogue, each course carrying its prerequisite groups — what
+// the planner UI needs to explain why an add might be rejected before the
 // student even tries it.
-export function listCoursesWithPrerequisites(): (Course & { prerequisites: Course[] })[] {
+export function listCoursesWithPrerequisites(): (Course & { prerequisiteGroups: Course[][] })[] {
   return listCourses().map((course) => ({
     ...course,
-    prerequisites: listPrerequisitesFor(course.id),
+    prerequisiteGroups: listPrerequisiteGroupsFor(course.id),
   }));
 }
 
-// A course with any prerequisite can only ever go in Semester 2: Semester 1
-// has no earlier semester within a plan for that prerequisite to have been
-// satisfied in. For Semester 2, every prerequisite must already be planned
-// in Semester 1 of the same plan. Returns the still-missing prerequisites
-// (empty means the course can be added).
-function missingPrerequisites(planId: number, courseId: number, semester: number): Course[] {
-  const prerequisites = listPrerequisitesFor(courseId);
-  if (prerequisites.length === 0) return [];
-  if (semester === 1) return prerequisites;
+export function listPreviouslyCompleted(
+  planId: number,
+): (PreviouslyCompletedCourse & { course: Course })[] {
+  return db
+    .select({
+      id: previouslyCompletedCourses.id,
+      planId: previouslyCompletedCourses.planId,
+      courseId: previouslyCompletedCourses.courseId,
+      course: courses,
+    })
+    .from(previouslyCompletedCourses)
+    .innerJoin(courses, eq(previouslyCompletedCourses.courseId, courses.id))
+    .where(eq(previouslyCompletedCourses.planId, planId))
+    .all();
+}
 
-  const semester1CourseIds = new Set(
+// Marks a course as completed outside this plan — the lightweight
+// alternative to a full academic history. Rejected if the course is already
+// planned in this plan (mutually exclusive with planning it) or already
+// marked completed.
+export function markPreviouslyCompleted(
+  planId: number,
+  courseId: number,
+): PreviouslyCompletedCourse {
+  const alreadyPlanned = db
+    .select()
+    .from(plannedCourses)
+    .where(and(eq(plannedCourses.planId, planId), eq(plannedCourses.courseId, courseId)))
+    .get();
+  if (alreadyPlanned) {
+    throw new CourseAlreadyPlannedError(
+      `course ${courseId} is already planned in plan ${planId}; remove it before marking it previously completed`,
+    );
+  }
+  try {
+    return db.insert(previouslyCompletedCourses).values({ planId, courseId }).returning().get();
+  } catch (err) {
+    if (isUniqueConstraintError(err)) {
+      throw new DuplicateCompletedCourseError(
+        `course ${courseId} is already marked previously completed in plan ${planId}`,
+      );
+    }
+    throw err;
+  }
+}
+
+// Scoped to planId so one student can never touch another student's rows.
+export function unmarkPreviouslyCompleted(planId: number, completedId: number): boolean {
+  const result = db
+    .delete(previouslyCompletedCourses)
+    .where(
+      and(
+        eq(previouslyCompletedCourses.id, completedId),
+        eq(previouslyCompletedCourses.planId, planId),
+      ),
+    )
+    .run();
+  return result.changes > 0;
+}
+
+// A prerequisite group is satisfied if any course in it was previously
+// completed, or planned strictly earlier in the same plan — planning it in
+// the same semester does not count, since the two would run concurrently.
+// Returns the groups still unsatisfied (empty means the course can be
+// added).
+function missingPrerequisites(planId: number, courseId: number, semester: number): Course[][] {
+  const groups = listPrerequisiteGroupsFor(courseId);
+  if (groups.length === 0) return [];
+
+  const completedIds = new Set(listPreviouslyCompleted(planId).map((entry) => entry.courseId));
+  const earlierPlannedIds = new Set(
     listPlannedCourses(planId)
-      .filter((planned) => planned.semester === 1)
+      .filter((planned) => planned.semester < semester)
       .map((planned) => planned.courseId),
   );
-  return prerequisites.filter((prerequisite) => !semester1CourseIds.has(prerequisite.id));
+  const satisfiedIds = new Set([...completedIds, ...earlierPlannedIds]);
+
+  return groups.filter((group) => !group.some((course) => satisfiedIds.has(course.id)));
 }
 
 // One active plan per Student ID: return it if it exists, otherwise create
@@ -192,11 +335,11 @@ export function getOrCreatePlan(studentId: string): SemesterPlan {
 }
 
 // Adds a course to a plan's semester. Semester must be 1 or 2 (also
-// enforced by a check constraint in the schema); a course whose
-// prerequisites aren't yet planned in an earlier semester of this plan
-// raises PrerequisiteNotSatisfiedError, and a course already in the plan (in
-// either semester) raises DuplicatePlannedCourseError instead of creating a
-// second row.
+// enforced by a check constraint in the schema). Raises
+// CourseAlreadyCompletedError if the course is marked previously completed
+// in this plan, PrerequisiteNotSatisfiedError if a prerequisite group isn't
+// yet satisfied, and DuplicatePlannedCourseError if the course is already
+// planned (in either semester).
 export function addPlannedCourse(
   planId: number,
   courseId: number,
@@ -205,11 +348,28 @@ export function addPlannedCourse(
   if (semester !== 1 && semester !== 2) {
     throw new RangeError("semester must be 1 or 2");
   }
-  const missing = missingPrerequisites(planId, courseId, semester);
-  if (missing.length > 0) {
+  const alreadyCompleted = db
+    .select()
+    .from(previouslyCompletedCourses)
+    .where(
+      and(
+        eq(previouslyCompletedCourses.planId, planId),
+        eq(previouslyCompletedCourses.courseId, courseId),
+      ),
+    )
+    .get();
+  if (alreadyCompleted) {
+    throw new CourseAlreadyCompletedError(
+      `course ${courseId} is already marked previously completed in plan ${planId}`,
+    );
+  }
+
+  const missingGroups = missingPrerequisites(planId, courseId, semester);
+  if (missingGroups.length > 0) {
+    const describe = (group: Course[]) => group.map((course) => course.code).join(" or ");
     throw new PrerequisiteNotSatisfiedError(
-      missing,
-      `requires ${missing.map((course) => course.code).join(", ")} to be planned in Semester 1 first`,
+      missingGroups,
+      `requires ${missingGroups.map(describe).join(", and ")} to be previously completed or planned in an earlier semester`,
     );
   }
   try {
