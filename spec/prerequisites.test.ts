@@ -3,9 +3,11 @@ import { beforeAll, describe, expect, inject, it } from "vitest";
 // Prerequisite checking against the real 2026 Master of Computing course
 // relationships seeded in src/lib/db.ts. A prerequisite group is satisfied by
 // a course previously completed, or planned strictly earlier in the same
-// plan — planning it in the same semester does not count. COMP6442 needs two
-// independent groups (COMP7710 AND COMP6260); COMP6331 needs one group with
-// two alternatives (COMP7710 OR COMP6442).
+// plan — planning it in the same semester does not count. COMP6331 needs one
+// group with two alternatives (COMP7710 OR COMP6442). No in-catalogue course
+// currently enforces more than one AND-group: COMP6442's and COMP8410's real
+// second groups are shown in requisiteText but not enforced here, so there's
+// no real (non-fabricated) multi-group case left to test against.
 const baseUrl = inject("baseUrl");
 
 const withOrigin = (init: RequestInit = {}): RequestInit => ({
@@ -94,22 +96,6 @@ describe("prerequisites", () => {
     const planned = await res.json();
     expect(planned.courseId).toBe(dependent.id);
     expect(planned.semester).toBe(2);
-  });
-
-  it("requires every AND group to be satisfied, not just one", async () => {
-    const plan = await createPlan(`${studentId}-and`);
-    const dependent = courseByCode.get("COMP6442");
-    const groupOne = courseByCode.get("COMP7710");
-    if (!dependent || !groupOne) throw new Error("seed courses missing");
-
-    await addCourse(plan.id, groupOne.id, 1);
-    // COMP6442 also needs COMP6260 (a separate group) - only one of its two
-    // groups is satisfied so far.
-    const res = await addCourse(plan.id, dependent.id, 2);
-    expect(res.status).toBe(422);
-    const body = await res.json();
-    expect(body.missing.flat()).toContain("COMP6260");
-    expect(body.missing.flat()).not.toContain("COMP7710");
   });
 
   it("satisfies an OR group via just one of its alternatives", async () => {

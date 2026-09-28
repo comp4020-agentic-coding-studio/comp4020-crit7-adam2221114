@@ -144,11 +144,13 @@ seedCourses();
 const SEED_PREREQUISITES: [child: string, groupId: number, parent: string][] = [
   ["COMP6120", 1, "COMP6442"],
   ["COMP6442", 1, "COMP7710"],
-  ["COMP6442", 2, "COMP6260"],
   ["COMP8410", 1, "COMP6240"],
   ["COMP6331", 1, "COMP7710"],
   ["COMP6331", 1, "COMP6442"],
 ];
+// COMP6442's real second AND-group (completed or currently enrolled in
+// MATH6005/COMP6260/MATH1005) is preserved verbatim in requisiteText above
+// but not enforced here: only COMP7710 is enforced as its prerequisite.
 
 function seedPrerequisites(): void {
   if (db.select().from(coursePrerequisites).limit(1).get()) return;
