@@ -365,3 +365,38 @@ The Crit 7 implementation is ready when:
 - the deployed Fly.io version has been manually verified
 
 When uncertain, favour the smallest implementation that proves the full end-to-end flow.
+
+---
+
+## 进度记录（2026-09-28 暂停点）
+
+这一节是给自己看的进度记录，不是给 agent 的新规则；标题带日期，过时了可以整段删掉重写。
+
+### 已完成
+
+- MVP 核心流程：Student ID 输入 → 获取/创建 plan → 查看课程目录 → 加入/移除
+  学期课程 → 学分合计 → SQLite 持久化 → 刷新页面保留 → 同一 Student ID
+  再次进入恢复原 plan。已通过自动化测试和人工 curl 验证。
+- 已用 Guestbook 起始代码替换为真正的 Planner 流程。
+- 已把课程目录从编造的本科课程换成真实来源的 2026 硕士
+  （Master of Computing, Software Development 专业）10 门课程，逐门核对
+  ANU Programs & Courses 官方课程页面（不是聚合的 program 页面，那个页面
+  有已知的标题混淆 bug）。
+- 已实现先修课程的 `groupId` 模型（同组 = OR，不同组 = AND）、
+  `requisiteText`（官方原文展示）、以及"曾经修过（previously completed）"
+  概念，并处理了曾修/已排入学期的互斥关系。
+- 已按用户要求，把 COMP6442 的强制先修条件收紧为只强制 COMP7710
+  （官方原文里的第二个 AND 条件组只展示、不强制，和 COMP8410 的处理方式一致）。
+- `pnpm check` 全绿（60/60 测试，0 类型错误）。
+- 已按小步提交（`feat`/`test`/`fix`/`docs` 各自独立 commit），
+  `PROCESS.md` 已按真实发生的决策更新。
+
+### 明天要做（尚未开始）
+
+- 部署到 Fly.io，在真实分配的 `*.fly.dev` URL 上人工验证一遍完整流程。
+- 部署后要重新确认一次持久化：刷新页面、换个 Student ID 再进来看之前的 plan
+  还在。
+- `reflections/crit-7.md` 还没写——按 CLAUDE.md 的要求，这个要留到接近提交
+  前才写，不要提前写。
+- 如果部署或验证过程中又做了新的决策/修正，记得同步更新 `PROCESS.md`。
+- 除非用户明确要求，不要在这些之外主动扩展功能范围。
