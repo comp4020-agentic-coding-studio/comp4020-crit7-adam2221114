@@ -17,10 +17,21 @@ const createPlan = async (studentId: string) => {
   return res.json();
 };
 
-// All seeded demo courses carry 6 units, so totals are predictable
-// multiples of 6 regardless of which specific courses are picked.
-let catalogue: { id: number; units: number }[];
-const courseId = (index: number): number => catalogue[index].id;
+// COMP8280, COMP6240 and ENGN8100 are all 6-unit, prerequisite-free courses
+// in the seed catalogue (src/lib/db.ts), so totals stay predictable without
+// relying on catalogue ordering.
+const CODES = ["COMP8280", "COMP6240", "ENGN8100"];
+let catalogue: { id: number; code: string; units: number }[];
+const courseId = (index: number): number => {
+  const course = catalogue.find((c) => c.code === CODES[index]);
+  if (!course) throw new Error(`seed course ${CODES[index]} missing`);
+  return course.id;
+};
+const unitsOf = (index: number): number => {
+  const course = catalogue.find((c) => c.code === CODES[index]);
+  if (!course) throw new Error(`seed course ${CODES[index]} missing`);
+  return course.units;
+};
 
 const addCourse = (planId: number, courseId: number, semester: number) =>
   fetch(
@@ -61,7 +72,7 @@ describe("semester unit totals", () => {
     await addCourse(plan.id, courseId(1), 1);
 
     const totals = await getTotals(plan.id);
-    expect(totals[1]).toBe(catalogue[0].units + catalogue[1].units);
+    expect(totals[1]).toBe(unitsOf(0) + unitsOf(1));
     expect(totals[2]).toBe(0);
   });
 
@@ -70,7 +81,7 @@ describe("semester unit totals", () => {
     await addCourse(plan.id, courseId(2), 2);
 
     const totals = await getTotals(plan.id);
-    expect(totals[2]).toBe(catalogue[2].units);
+    expect(totals[2]).toBe(unitsOf(2));
     expect(totals[1]).toBe(0);
   });
 
@@ -79,11 +90,11 @@ describe("semester unit totals", () => {
     const first = await (await addCourse(plan.id, courseId(0), 1)).json();
     await addCourse(plan.id, courseId(1), 1);
 
-    expect((await getTotals(plan.id))[1]).toBe(catalogue[0].units + catalogue[1].units);
+    expect((await getTotals(plan.id))[1]).toBe(unitsOf(0) + unitsOf(1));
 
     await removeCourse(plan.id, first.id);
 
-    expect((await getTotals(plan.id))[1]).toBe(catalogue[1].units);
+    expect((await getTotals(plan.id))[1]).toBe(unitsOf(1));
   });
 
   it("stays correct after re-fetching the plan (simulated reload)", async () => {
@@ -94,7 +105,7 @@ describe("semester unit totals", () => {
     const first = await getTotals(plan.id);
     const second = await getTotals(plan.id);
     expect(second).toEqual(first);
-    expect(second[1]).toBe(catalogue[0].units);
-    expect(second[2]).toBe(catalogue[2].units);
+    expect(second[1]).toBe(unitsOf(0));
+    expect(second[2]).toBe(unitsOf(2));
   });
 });

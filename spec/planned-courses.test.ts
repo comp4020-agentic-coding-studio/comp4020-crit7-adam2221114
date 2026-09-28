@@ -19,17 +19,19 @@ const createPlan = async (studentId: string) => {
   return res.json();
 };
 
-const firstCourseId = async (): Promise<number> => {
+// COMP7710 and COMP8280 are both prerequisite-free in the seed catalogue
+// (src/lib/db.ts), so they're safe stand-ins for "any addable course" without
+// relying on catalogue ordering.
+const courseIdByCode = async (code: string): Promise<number> => {
   const res = await fetch(new URL("/api/courses", baseUrl));
-  const courses = await res.json();
-  return courses[0].id;
+  const courses: { id: number; code: string }[] = await res.json();
+  const course = courses.find((c) => c.code === code);
+  if (!course) throw new Error(`seed course ${code} missing`);
+  return course.id;
 };
 
-const secondCourseId = async (): Promise<number> => {
-  const res = await fetch(new URL("/api/courses", baseUrl));
-  const courses = await res.json();
-  return courses[1].id;
-};
+const firstCourseId = () => courseIdByCode("COMP7710");
+const secondCourseId = () => courseIdByCode("COMP8280");
 
 const addCourse = (planId: number, courseId: number, semester: number) =>
   fetch(

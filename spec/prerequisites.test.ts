@@ -1,11 +1,11 @@
 import { beforeAll, describe, expect, inject, it } from "vitest";
 
-// Prerequisite checking: a deliberately small, flat relation between demo
-// courses (seeded in src/lib/db.ts — COMP2100 requires COMP1100), validated
-// only when a course is added. Semester 1 has no earlier semester within a
-// plan, so a course with a prerequisite can only ever land in Semester 2,
-// and only once its prerequisite is already planned in Semester 1 of the
-// same plan.
+// Prerequisite checking against the real 2026 Master of Computing course
+// relationships seeded in src/lib/db.ts. A prerequisite group is satisfied by
+// a course previously completed, or planned strictly earlier in the same
+// plan — planning it in the same semester does not count. COMP6442 needs two
+// independent groups (COMP7710 AND COMP6260); COMP6331 needs one group with
+// two alternatives (COMP7710 OR COMP6442).
 const baseUrl = inject("baseUrl");
 
 const withOrigin = (init: RequestInit = {}): RequestInit => ({
@@ -30,6 +30,12 @@ const addCourse = (planId: number, courseId: number, semester: number) =>
     }),
   );
 
+const markCompleted = (planId: number, courseId: number) =>
+  fetch(
+    new URL(`/api/plans/${planId}/completed`, baseUrl),
+    withOrigin({ method: "POST", body: new URLSearchParams({ courseId: String(courseId) }) }),
+  );
+
 let courseByCode: Map<string, { id: number; code: string }>;
 
 describe("prerequisites", () => {
@@ -45,8 +51,8 @@ describe("prerequisites", () => {
 
   it("adds a course with no prerequisite to either semester", async () => {
     const plan = await createPlan(`${studentId}-none`);
-    const foundations = courseByCode.get("COMP1010");
-    if (!foundations) throw new Error("seed course COMP1010 missing");
+    const foundations = courseByCode.get("COMP7710");
+    if (!foundations) throw new Error("seed course COMP7710 missing");
 
     const res = await addCourse(plan.id, foundations.id, 1);
     expect(res.status).toBe(200);
@@ -54,19 +60,19 @@ describe("prerequisites", () => {
 
   it("rejects adding a course before its prerequisite is planned", async () => {
     const plan = await createPlan(`${studentId}-invalid`);
-    const dependent = courseByCode.get("COMP2100");
-    if (!dependent) throw new Error("seed course COMP2100 missing");
+    const dependent = courseByCode.get("COMP8410");
+    if (!dependent) throw new Error("seed course COMP8410 missing");
 
-    const res = await addCourse(plan.id, dependent.id, 2);
+    const res = await addCourse(plan.id, dependent.id, 1);
     expect(res.status).toBe(422);
     const body = await res.json();
-    expect(body.missing).toContain("COMP1100");
+    expect(body.missing.flat()).toContain("COMP6240");
   });
 
-  it("rejects a prerequisite-bearing course in Semester 1, even with the prerequisite planned", async () => {
-    const plan = await createPlan(`${studentId}-sem1`);
-    const prerequisite = courseByCode.get("COMP1100");
-    const dependent = courseByCode.get("COMP2100");
+  it("rejects a prerequisite-bearing course in the same semester as its prerequisite", async () => {
+    const plan = await createPlan(`${studentId}-samesem`);
+    const prerequisite = courseByCode.get("COMP6240");
+    const dependent = courseByCode.get("COMP8410");
     if (!prerequisite || !dependent) throw new Error("seed courses missing");
 
     await addCourse(plan.id, prerequisite.id, 1);
@@ -74,10 +80,10 @@ describe("prerequisites", () => {
     expect(res.status).toBe(422);
   });
 
-  it("allows adding a course once its prerequisite is planned in Semester 1", async () => {
+  it("allows adding a course once its prerequisite is planned in an earlier semester", async () => {
     const plan = await createPlan(`${studentId}-valid`);
-    const prerequisite = courseByCode.get("COMP1100");
-    const dependent = courseByCode.get("COMP2100");
+    const prerequisite = courseByCode.get("COMP6240");
+    const dependent = courseByCode.get("COMP8410");
     if (!prerequisite || !dependent) throw new Error("seed courses missing");
 
     const prereqRes = await addCourse(plan.id, prerequisite.id, 1);
@@ -88,5 +94,81 @@ describe("prerequisites", () => {
     const planned = await res.json();
     expect(planned.courseId).toBe(dependent.id);
     expect(planned.semester).toBe(2);
+  });
+
+  it("requires every AND group to be satisfied, not just one", async () => {
+    const plan = await createPlan(`${studentId}-and`);
+    const dependent = courseByCode.get("COMP6442");
+    const groupOne = courseByCode.get("COMP7710");
+    if (!dependent || !groupOne) throw new Error("seed courses missing");
+
+    await addCourse(plan.id, groupOne.id, 1);
+    // COMP6442 also needs COMP6260 (a separate group) - only one of its two
+    // groups is satisfied so far.
+    const res = await addCourse(plan.id, dependent.id, 2);
+    expect(res.status).toBe(422);
+    const body = await res.json();
+    expect(body.missing.flat()).toContain("COMP6260");
+    expect(body.missing.flat()).not.toContain("COMP7710");
+  });
+
+  it("satisfies an OR group via just one of its alternatives", async () => {
+    const plan = await createPlan(`${studentId}-or`);
+    // COMP6331 requires (COMP7710 OR COMP6442) as a single group - planning
+    // just COMP7710 (without ever touching COMP6442) should be enough.
+    const alternative = courseByCode.get("COMP7710");
+    const dependent = courseByCode.get("COMP6331");
+    if (!alternative || !dependent) throw new Error("seed courses missing");
+
+    await addCourse(plan.id, alternative.id, 1);
+    const res = await addCourse(plan.id, dependent.id, 2);
+    expect(res.status).toBe(200);
+  });
+
+  it("satisfies a prerequisite with a previously-completed course", async () => {
+    const plan = await createPlan(`${studentId}-completed`);
+    const prerequisite = courseByCode.get("COMP6240");
+    const dependent = courseByCode.get("COMP8410");
+    if (!prerequisite || !dependent) throw new Error("seed courses missing");
+
+    const markRes = await markCompleted(plan.id, prerequisite.id);
+    expect(markRes.status).toBe(200);
+
+    const res = await addCourse(plan.id, dependent.id, 1);
+    expect(res.status).toBe(200);
+  });
+
+  it("keeps previously-completed and planned mutually exclusive", async () => {
+    const plan = await createPlan(`${studentId}-exclusive`);
+    const course = courseByCode.get("COMP8280");
+    if (!course) throw new Error("seed course COMP8280 missing");
+
+    const added = await (await addCourse(plan.id, course.id, 1)).json();
+    const markRes = await markCompleted(plan.id, course.id);
+    expect(markRes.status).toBe(409);
+
+    // The other direction: mark completed first, then try to plan it.
+    const plan2 = await createPlan(`${studentId}-exclusive-2`);
+    const course2 = courseByCode.get("COMP8280");
+    if (!course2) throw new Error("seed course COMP8280 missing");
+    const markFirst = await markCompleted(plan2.id, course2.id);
+    expect(markFirst.status).toBe(200);
+    const addAfterMark = await addCourse(plan2.id, course2.id, 1);
+    expect(addAfterMark.status).toBe(409);
+
+    // added in plan 1 stays untouched by the plan-2 checks above.
+    expect(added.courseId).toBe(course.id);
+  });
+
+  it("prevents marking the same course previously completed twice", async () => {
+    const plan = await createPlan(`${studentId}-dup-completed`);
+    const course = courseByCode.get("COMP6260");
+    if (!course) throw new Error("seed course COMP6260 missing");
+
+    const first = await markCompleted(plan.id, course.id);
+    expect(first.status).toBe(200);
+
+    const second = await markCompleted(plan.id, course.id);
+    expect(second.status).toBe(409);
   });
 });
