@@ -139,6 +139,42 @@ hitting the mutual-exclusivity conflict in both directions, and reloading
 the page to confirm all of that survived — rather than trusting the
 automated suite alone for a feature this central to the brief.
 
+## Deployment
+
+Before deploying, I noticed `README.md` was still the starter's template
+text. `spec/readme.test.ts` only asserts that `/readme/` serves whatever is
+in `README.md`, so it would have passed either way — but the file is the
+marker-facing "what this is and what good looks like here" account, so I
+wrote it for real before shipping rather than leaving a placeholder live on
+the deployed URL.
+
+Deployed with the course-provided command
+(`flyctl deploy --remote-only --ha=false -a comp4020-crit7-adam2221114`).
+The app had an existing `v1` release from the course's own initial
+provisioning, but that was the unmodified starter, not this project's code —
+this was the first deploy of the actual Semester Planner.
+
+I then verified the full persistence contract by hand against the live
+`https://comp4020-crit7-adam2221114.fly.dev`, not just the local build:
+
+- created a plan for a fresh Student ID via `POST /` (Astro's built-in
+  cross-site POST protection means this needs a matching `Origin` header,
+  same as a real browser form submission would send)
+- added COMP6240 to Semester 1, confirmed the unit total updated to 6 and
+  the course appeared in the planned list
+- re-submitted the same Student ID as if returning later, and confirmed the
+  same plan loaded rather than a new one being created
+- attempted to add the same course again and confirmed it was rejected as a
+  duplicate (`status=duplicate`) instead of silently succeeding
+- removed the course and confirmed the total returned to 0
+- checked the empty/error/success UI states directly: an empty Student ID
+  submission returns `role="alert" status-error` with "Enter a Student ID to
+  continue.", and a successful add returns `role="status" status-ok` with
+  "Course added to your plan."
+
+All of this held on the deployed app, backed by the persistent Fly volume,
+not just in the local dev/test environment.
+
 ## Before you ship
 
 `pnpm check:evidence` verifies that this comment is gone, that your citations

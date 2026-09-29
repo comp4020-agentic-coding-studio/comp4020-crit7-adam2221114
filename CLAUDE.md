@@ -368,7 +368,7 @@ When uncertain, favour the smallest implementation that proves the full end-to-e
 
 ---
 
-## 进度记录（2026-09-28 暂停点）
+## 进度记录（2026-09-29 暂停点）
 
 这一节是给自己看的进度记录，不是给 agent 的新规则；标题带日期，过时了可以整段删掉重写。
 
@@ -390,13 +390,24 @@ When uncertain, favour the smallest implementation that proves the full end-to-e
 - `pnpm check` 全绿（60/60 测试，0 类型错误）。
 - 已按小步提交（`feat`/`test`/`fix`/`docs` 各自独立 commit），
   `PROCESS.md` 已按真实发生的决策更新。
+- 发现 `README.md` 还是起始模板原文（没人替换过），在部署前先写成真实内容——
+  `/readme/` 是 spec 检查过的承诺，模板文字会原样被部署上线。
+- 已部署到 Fly.io（`flyctl deploy --remote-only --ha=false -a
+  comp4020-crit7-adam2221114`）。部署前 Fly 上只有课程初始配置的 `v1`
+  release（起始代码，不是这个项目的实现），这是第一次把真正的 Planner
+  部署上去。
+- 已在真实的 `https://comp4020-crit7-adam2221114.fly.dev` 上人工用 curl
+  逐步验证完整流程：创建 plan → 加课（学分合计变 6）→ 用同一个 Student ID
+  "回来"确认加载的是同一个 plan 而不是新建的 → 重复加同一门课确认被拒绝
+  （duplicate）→ 移除课程确认合计归零 → 确认空输入/成功/错误三种状态文案
+  都正确（`status-error` / `status-ok`）。细节记在 `PROCESS.md` 的
+  "Deployment" 一节。
 
-### 明天要做（尚未开始）
+### 还没做
 
-- 部署到 Fly.io，在真实分配的 `*.fly.dev` URL 上人工验证一遍完整流程。
-- 部署后要重新确认一次持久化：刷新页面、换个 Student ID 再进来看之前的 plan
-  还在。
 - `reflections/crit-7.md` 还没写——按 CLAUDE.md 的要求，这个要留到接近提交
   前才写，不要提前写。
-- 如果部署或验证过程中又做了新的决策/修正，记得同步更新 `PROCESS.md`。
+- 本地还有 31 个 commit 领先 `origin/main`，还没 push（是否现在 push、要不要
+  把仓库设为 public 让 CI 也跑起来，需要用户确认）。
+- 如果后续验证或提交前又做了新的决策/修正，记得同步更新 `PROCESS.md`。
 - 除非用户明确要求，不要在这些之外主动扩展功能范围。
