@@ -234,6 +234,9 @@ all (COMP6240) still renders a clean `available` card with no empty
 prerequisite clutter. `pnpm check` stayed green throughout (60/60 tests, 0
 type errors).
 
+Landed as
+[`24ce455`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit7-adam2221114/commit/24ce455).
+
 ## Deployment
 
 Before deploying, I noticed `README.md` was still the starter's template
