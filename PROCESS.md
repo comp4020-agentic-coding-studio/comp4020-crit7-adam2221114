@@ -190,6 +190,50 @@ single group that every other course exercises.
 
 `pnpm check` stayed green throughout (60/60 tests, 0 type errors).
 
+## State-driven course cards
+
+After the catalogue expansion, a course card's action area still worked the
+way it did on day one: an always-enabled "Add to Semester 1" / "Add to
+Semester 2" button per offered semester, styled as a warning when a
+prerequisite wasn't met, plus a hint line underneath. That meant the user
+had to click Add to find out whether a placement was actually going to
+succeed — the card never told them up front.
+
+I redesigned the card's action area to be state-driven instead: for each
+course and each offered semester, the card now derives one of three states
+(`available`, `blocked`, `not-offered`) and renders accordingly, before any
+button appears. A blocked semester shows which prerequisite group is
+satisfied and which is missing, with a chip per alternative course; if a
+missing alternative is already planned (just not early enough), the card
+says so and suggests moving it earlier, and if it isn't in the plan at all,
+the card offers a one-click "Mark X as previously completed" action inline.
+Only an `available` semester gets a real, enabled Add button. "Mark this
+course previously completed" moved from a full-width secondary button to a
+small text link below the placements, so it no longer competes visually
+with the primary planning action. The official ANU requisite text is
+unchanged — still under the same `<details>` disclosure.
+
+Importantly, none of this duplicates prerequisite logic in the template.
+The per-semester state is derived by calling the same `missingPrerequisites`
+function `addPlannedCourse` already enforces against — the template only
+does set-difference bookkeeping (matching a course's full prerequisite
+groups against the subset `missingPrerequisites` reports back, by content
+rather than by reference, since the two come from separate queries) to
+decide what to show as satisfied vs. missing. The backend prerequisite
+semantics did not change at all.
+
+I hand-verified the three scenarios this was built around, against a fresh
+local database: with COMP7710 marked previously completed, COMP6442 showed
+`available` for both semesters; with COMP7710 planned in Semester 1 instead,
+COMP6442's Semester 1 placement correctly showed `blocked` (same-semester
+planning doesn't count) while Semester 2 showed `available`; and with
+COMP7710 moved to Semester 2, COMP6442 showed `blocked` in both semesters,
+since Semester 2 can never satisfy a Semester 1 requirement and doesn't even
+satisfy its own semester's requirement. A course with no prerequisites at
+all (COMP6240) still renders a clean `available` card with no empty
+prerequisite clutter. `pnpm check` stayed green throughout (60/60 tests, 0
+type errors).
+
 ## Deployment
 
 Before deploying, I noticed `README.md` was still the starter's template

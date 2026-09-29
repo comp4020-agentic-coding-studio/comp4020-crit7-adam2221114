@@ -167,15 +167,61 @@ const showEnrolmentCaveat = flash?.kind === "ok" || flash?.kind === "warning";
 
 const plannedForSemester = (semester: 1 | 2) => planned.filter((p) => p.semester === semester);
 
-const describeGroups = (groups: Course[][]) =>
-  groups.length === 0
-    ? "—"
-    : groups.map((group) => group.map((course) => course.code).join(" or ")).join(" and ");
-
 const offeredSemestersOf = (course: Course): (1 | 2)[] =>
   course.offeredSemester === "Both"
     ? [1, 2]
     : [(course.offeredSemester === "1" ? 1 : 2) as 1 | 2];
+
+// A group's identity for matching a course's full prerequisiteGroups (from
+// listCoursesWithPrerequisites) against the subset missingPrerequisites
+// reports as still unsatisfied for one semester — same underlying groups,
+// fetched separately, so compared by content rather than reference.
+const groupKey = (group: Course[]) =>
+  group
+    .map((course) => course.code)
+    .sort()
+    .join("+");
+
+type PlacementState = "available" | "blocked" | "not-offered";
+
+type SemesterPlacement = {
+  semester: 1 | 2;
+  state: PlacementState;
+  satisfiedGroups: Course[][];
+  missingGroups: Course[][];
+};
+
+// Derives, per semester, whether adding this course would actually pass the
+// planner's checks right now — reusing missingPrerequisites (the same
+// function addPlannedCourse enforces against) rather than re-deriving
+// AND/OR/earlier-semester satisfaction in the template.
+const semesterPlacementsFor = (
+  course: Course & { prerequisiteGroups: Course[][] },
+): SemesterPlacement[] => {
+  const offered = offeredSemestersOf(course);
+  return ([1, 2] as const).map((semester) => {
+    if (!offered.includes(semester)) {
+      return { semester, state: "not-offered", satisfiedGroups: [], missingGroups: [] };
+    }
+    const missingGroups = missingPrerequisites(plan.id, course.id, semester);
+    const missingKeys = new Set(missingGroups.map(groupKey));
+    const satisfiedGroups = course.prerequisiteGroups.filter(
+      (group) => !missingKeys.has(groupKey(group)),
+    );
+    return {
+      semester,
+      state: missingGroups.length === 0 ? "available" : "blocked",
+      satisfiedGroups,
+      missingGroups,
+    };
+  });
+};
+
+const PLACEMENT_BADGE_TEXT: Record<PlacementState, string> = {
+  available: "Available",
+  blocked: "Prerequisites needed",
+  "not-offered": "Not offered",
+};
 ---
 
 <!doctype html>
@@ -347,10 +393,6 @@ const offeredSemestersOf = (course: Course): (1 | 2)[] =>
                     </div>
                   </dl>
 
-                  {course.prerequisiteGroups.length > 0 && (
-                    <p class="course-prereq">Prerequisite: {describeGroups(course.prerequisiteGroups)}</p>
-                  )}
-
                   {course.requisiteText && (
                     <details class="requisite-details">
                       <summary>Official ANU requisite text</summary>
@@ -365,34 +407,85 @@ const offeredSemestersOf = (course: Course): (1 | 2)[] =>
                     )}
                     {status === "available" && (
                       <>
-                        <span class="badge badge-available">Available</span>
-                        <form method="post" class="add-form">
-                          <input type="hidden" name="intent" value="add" />
-                          <input type="hidden" name="courseId" value={course.id} />
-                          {offeredSemestersOf(course).map((semester) => {
-                            const stillMissing = missingPrerequisites(plan.id, course.id, semester);
-                            return (
-                              <span>
-                                <button
-                                  name="semester"
-                                  value={semester}
-                                  class={stillMissing.length > 0 ? "warning-outline" : undefined}
-                                >
-                                  Add to Semester {semester}
-                                </button>
-                                {stillMissing.length > 0 && (
-                                  <span class="prereq-hint">
-                                    Needs {describeGroups(stillMissing)} first
-                                  </span>
+                        <div class="placements">
+                          {semesterPlacementsFor(course).map((placement) => (
+                            <div class="placement" data-state={placement.state}>
+                              <div class="placement-header">
+                                <span class="placement-title">Semester {placement.semester}</span>
+                                <span class={`badge badge-${placement.state}`}>
+                                  {PLACEMENT_BADGE_TEXT[placement.state]}
+                                </span>
+                              </div>
+
+                              {placement.state === "blocked" && (
+                                <div class="prereq-groups">
+                                  {placement.satisfiedGroups.map((group) => (
+                                    <p class="prereq-group satisfied">
+                                      <span class="prereq-group-label">Satisfied</span>
+                                      {group.map((c) => c.code).join(" or ")}
+                                    </p>
+                                  ))}
+                                  {placement.missingGroups.map((group) => (
+                                    <div class="prereq-group missing">
+                                      <span class="prereq-group-label">Needs</span>
+                                      <ul class="prereq-alt-list">
+                                        {group.map((alt) => {
+                                          const altPlanned = plannedByCourseId.get(alt.id);
+                                          return (
+                                            <li>
+                                              <span class="course-chip small">{alt.code}</span>
+                                              {altPlanned ? (
+                                                <span class="prereq-guidance">
+                                                  planned for Semester {altPlanned.semester} — move
+                                                  it to an earlier semester to satisfy this
+                                                </span>
+                                              ) : (
+                                                <form method="post" class="inline-action">
+                                                  <input type="hidden" name="intent" value="complete" />
+                                                  <input type="hidden" name="courseId" value={alt.id} />
+                                                  <button class="link-button">
+                                                    Mark {alt.code} as previously completed
+                                                  </button>
+                                                </form>
+                                              )}
+                                            </li>
+                                          );
+                                        })}
+                                      </ul>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+
+                              {placement.state === "available" &&
+                                course.prerequisiteGroups.length > 0 && (
+                                  <p class="prereq-satisfied-note">Prerequisites satisfied</p>
                                 )}
-                              </span>
-                            );
-                          })}
-                        </form>
-                        <form method="post">
+
+                              {placement.state === "available" ? (
+                                <form method="post" class="add-form">
+                                  <input type="hidden" name="intent" value="add" />
+                                  <input type="hidden" name="courseId" value={course.id} />
+                                  <input type="hidden" name="semester" value={placement.semester} />
+                                  <button>Add to Semester {placement.semester}</button>
+                                </form>
+                              ) : (
+                                <p class="placement-reason">
+                                  {placement.state === "not-offered"
+                                    ? `Not offered in Semester ${placement.semester}.`
+                                    : "Satisfy the prerequisites above to unlock this placement."}
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+
+                        <form method="post" class="complete-action">
                           <input type="hidden" name="intent" value="complete" />
                           <input type="hidden" name="courseId" value={course.id} />
-                          <button class="secondary">Mark previously completed</button>
+                          <button class="link-button">
+                            Done this course elsewhere? Mark previously completed
+                          </button>
                         </form>
                       </>
                     )}

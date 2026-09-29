@@ -177,17 +177,6 @@ button:hover {
   border-color: var(--color-primary-dark);
 }
 
-button.secondary {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  color: var(--color-text);
-}
-
-button.secondary:hover {
-  border-color: var(--color-text-muted);
-  background: var(--color-bg);
-}
-
 button.ghost {
   background: transparent;
   border: 1px solid var(--color-danger);
@@ -200,14 +189,21 @@ button.ghost:hover {
   background: var(--color-danger-bg);
 }
 
-button.warning-outline {
-  background: var(--color-surface);
-  border: 1px solid var(--color-warning-border);
-  color: var(--color-warning);
+button.link-button {
+  background: transparent;
+  border: none;
+  color: var(--color-primary-dark);
+  text-decoration: underline;
+  padding: 0;
+  min-height: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
 }
 
-button.warning-outline:hover {
-  background: var(--color-warning-bg);
+button.link-button:hover {
+  color: var(--color-primary);
+  background: transparent;
 }
 
 /* Shared text helpers ------------------------------------------------------ */
@@ -615,12 +611,6 @@ button.warning-outline:hover {
   font-weight: 600;
 }
 
-.course-prereq {
-  margin: 0;
-  font-size: 0.88rem;
-  color: var(--color-text-muted);
-}
-
 .requisite-details {
   font-size: 0.85rem;
   color: var(--color-text-muted);
@@ -662,6 +652,17 @@ button.warning-outline:hover {
   color: #fff;
 }
 
+.badge-blocked {
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+}
+
+.badge-not-offered {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+}
+
 .course-actions {
   display: flex;
   flex-direction: column;
@@ -677,11 +678,125 @@ button.warning-outline:hover {
   gap: 0.4rem;
 }
 
-.prereq-hint {
-  display: block;
-  font-size: 0.78rem;
+/* Per-semester placement — the state-driven core of a catalogue card:
+   each semester is independently available, blocked or not-offered, and
+   only an available placement gets a real Add button (see
+   src/pages/plan/[studentId].astro's semesterPlacementsFor). */
+.placements {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.placement {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 0.55rem 0.65rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  background: var(--color-surface);
+}
+
+.placement[data-state="blocked"] {
+  border-color: var(--color-warning-border);
+}
+
+.placement[data-state="not-offered"] {
+  opacity: 0.7;
+}
+
+.placement-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.placement-title {
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.prereq-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-size: 0.82rem;
+}
+
+.prereq-group {
+  margin: 0;
+}
+
+.prereq-group-label {
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.68rem;
+  letter-spacing: 0.03em;
+  margin-inline-end: 0.35rem;
+}
+
+.prereq-group.satisfied {
+  color: var(--color-success);
+}
+
+.prereq-group.satisfied .prereq-group-label {
+  color: var(--color-success);
+}
+
+.prereq-group.missing .prereq-group-label {
   color: var(--color-warning);
+}
+
+.prereq-alt-list {
+  list-style: none;
+  margin: 0.2rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.prereq-alt-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.course-chip.small {
+  font-size: 0.78rem;
+  padding: 0.1rem 0.4rem;
+  margin-inline-end: 0;
+}
+
+.prereq-guidance {
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+}
+
+.prereq-satisfied-note {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--color-success);
   font-weight: 600;
+}
+
+.placement-reason {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+}
+
+.inline-action {
+  margin: 0;
+}
+
+.complete-action {
+  margin-top: 0.4rem;
+  padding-top: 0.5rem;
+  border-top: 1px dashed var(--color-border);
 }
 
 /* Utility ------------------------------------------------------------------ */
