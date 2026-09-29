@@ -17,7 +17,7 @@ refreshing the page or coming back later with the same Student ID always
 shows the same plan.
 
 The catalogue also carries real ANU prerequisite and incompatibility rules
-for these ten courses, sourced from each course's own Programs & Courses
+for these courses, sourced from each course's own Programs & Courses
 page (not the aggregated program-requirements page, which conflates
 COMP7710 and COMP6710). A course can't be added until its enforceable
 prerequisites are met, either by an earlier semester in the same plan or by

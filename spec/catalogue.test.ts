@@ -12,7 +12,7 @@ describe("course catalogue", () => {
     const list = await res.json();
     expect(Array.isArray(list)).toBe(true);
     expect(list.length).toBeGreaterThanOrEqual(8);
-    expect(list.length).toBeLessThanOrEqual(12);
+    expect(list.length).toBeLessThanOrEqual(18);
   });
 
   it("gives each course a code, name, units, and offered semester", async () => {

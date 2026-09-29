@@ -125,6 +125,45 @@ const SEED_COURSES: (typeof courses.$inferInsert)[] = [
     requisiteText:
       "You must be studying Master of Computing or Master of Computing (Advanced), or have completed 6 units of COMP6442, COMP6710 or COMP6720. Incompatible with COMP3900.",
   },
+  {
+    code: "COMP6320",
+    name: "Artificial Intelligence",
+    units: 6,
+    offeredSemester: "1",
+    requisiteText:
+      "You must have completed COMP6710, COMP7710 or COMP1110 (or be enrolled in the Master of Computing (Advanced)), and have completed or be currently enrolled in COMP6262 or COMP2620. Incompatible with COMP3620.",
+  },
+  {
+    code: "COMP6262",
+    name: "Logic",
+    units: 6,
+    offeredSemester: "1",
+    requisiteText: "You are not able to enrol in this course if you have previously completed COMP2620 or PHIL2080.",
+  },
+  {
+    code: "COMP8712",
+    name: "Compiler Construction",
+    units: 6,
+    offeredSemester: "1",
+    requisiteText:
+      "You must have completed COMP6442 and COMP6310. Students who have previously completed COMP3710 or COMP6470 should contact CSS Student Services for a permission code.",
+  },
+  {
+    code: "COMP4130",
+    name: "Managing Software Quality and Process",
+    units: 6,
+    offeredSemester: "1",
+    requisiteText:
+      "You must have successfully completed COMP2120 and 12 units of 2000-level COMP courses. Incompatible with COMP8131.",
+  },
+  {
+    code: "COMP6670",
+    name: "Introduction to Machine Learning",
+    units: 6,
+    offeredSemester: "2",
+    requisiteText:
+      "You must be enrolled in the Master of Computing (Advanced), or have completed or be currently enrolled in COMP6710, COMP7710 or COMP6730, or have completed COMP1110 or COMP1140. Incompatible with COMP3670.",
+  },
 ];
 
 function seedCourses(): void {
@@ -147,10 +186,21 @@ const SEED_PREREQUISITES: [child: string, groupId: number, parent: string][] = [
   ["COMP8410", 1, "COMP6240"],
   ["COMP6331", 1, "COMP7710"],
   ["COMP6331", 1, "COMP6442"],
+  ["COMP6320", 1, "COMP7710"],
+  ["COMP6320", 2, "COMP6262"],
+  ["COMP8712", 1, "COMP6442"],
+  ["COMP6670", 1, "COMP7710"],
 ];
 // COMP6442's real second AND-group (completed or currently enrolled in
 // MATH6005/COMP6260/MATH1005) is preserved verbatim in requisiteText above
 // but not enforced here: only COMP7710 is enforced as its prerequisite.
+// COMP6320 is the one course in this catalogue with two enforced AND-groups
+// (COMP7710, and separately COMP6262) — both of its real alternatives happen
+// to be representable in-catalogue, unlike COMP6442/COMP6331 above.
+// COMP8712's real second AND-group (COMP6310) and COMP6670's other
+// alternatives (COMP6730, COMP1110/1140, Master of Computing (Advanced)
+// enrolment) are preserved verbatim in requisiteText but not enforced, for
+// the same reason: they name a course or condition outside this catalogue.
 
 function seedPrerequisites(): void {
   if (db.select().from(coursePrerequisites).limit(1).get()) return;

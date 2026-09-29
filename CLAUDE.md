@@ -52,7 +52,13 @@ Do **not** implement password authentication or claim that Student ID alone is s
 
 ## Scope
 
-Use only one representative ANU computing program and approximately **8–12 sample courses**.
+Use only one representative ANU computing program and approximately **8–18 sample courses**,
+all drawn from the Computer Science / School of Computing (COMP) subject area — no other
+subject areas, to keep this a clearly-scoped demo rather than a full program plan.
+
+(Originally scoped to 8–12; widened on 2026-09-29 at the user's explicit request to add more
+demo courses to the same program, still Computer Science only. See the dated progress note at
+the bottom of this file.)
 
 The prototype does not need to contain every ANU course.
 
@@ -337,7 +343,7 @@ The prototype should look intentional, but functionality and clarity matter more
 
 Only a small representative catalogue is needed.
 
-Use approximately 8–12 computing courses.
+Use approximately 8–18 computing courses, all Computer Science (COMP).
 
 Course information should be clearly treated as demonstration data for the prototype.
 
@@ -378,17 +384,24 @@ When uncertain, favour the smallest implementation that proves the full end-to-e
   学期课程 → 学分合计 → SQLite 持久化 → 刷新页面保留 → 同一 Student ID
   再次进入恢复原 plan。已通过自动化测试和人工 curl 验证。
 - 已用 Guestbook 起始代码替换为真正的 Planner 流程。
-- 已把课程目录从编造的本科课程换成真实来源的 2026 硕士
-  （Master of Computing, Software Development 专业）10 门课程，逐门核对
-  ANU Programs & Courses 官方课程页面（不是聚合的 program 页面，那个页面
-  有已知的标题混淆 bug）。
+- 课程目录来自真实来源的 2026 硕士（Master of Computing, Software
+  Development 专业）课程，逐门核对 ANU Programs & Courses 官方课程页面（不是
+  聚合的 program 页面，那个页面有已知的标题混淆 bug）。原本 10 门，
+  2026-09-29 应用户要求又加了 5 门（COMP6320 人工智能、COMP6262 逻辑、
+  COMP8712 编译原理、COMP4130 软件质量管理、COMP6670 机器学习导论），共 15
+  门，全部仍是 School of Computing 的 COMP 课程，没有跨到其他学院。为此把
+  自己定的"8–12 门"上限放宽成"8–18 门"（CLAUDE.md 的 Scope 和 Course data
+  两节、以及 `spec/catalogue.test.ts` 的断言都同步改了）。
 - 已实现先修课程的 `groupId` 模型（同组 = OR，不同组 = AND）、
   `requisiteText`（官方原文展示）、以及"曾经修过（previously completed）"
-  概念，并处理了曾修/已排入学期的互斥关系。
+  概念，并处理了曾修/已排入学期的互斥关系。COMP6320 是目前唯一一门有两个
+  强制 AND 组的课（COMP7710 和 COMP6262），因为它的两个真实条件恰好都能在
+  目录里代表出来。
 - 已按用户要求，把 COMP6442 的强制先修条件收紧为只强制 COMP7710
-  （官方原文里的第二个 AND 条件组只展示、不强制，和 COMP8410 的处理方式一致）。
+  （官方原文里的第二个 AND 条件组只展示、不强制，和 COMP8410、COMP8712、
+  COMP6670 的处理方式一致）。
 - `pnpm check` 全绿（60/60 测试，0 类型错误）。
-- 已按小步提交（`feat`/`test`/`fix`/`docs` 各自独立 commit），
+- 已按小步提交（`feat`/`test`/`fix`/`docs`/`style` 各自独立 commit），
   `PROCESS.md` 已按真实发生的决策更新。
 - 发现 `README.md` 还是起始模板原文（没人替换过），在部署前先写成真实内容——
   `/readme/` 是 spec 检查过的承诺，模板文字会原样被部署上线。
@@ -402,12 +415,16 @@ When uncertain, favour the smallest implementation that proves the full end-to-e
   （duplicate）→ 移除课程确认合计归零 → 确认空输入/成功/错误三种状态文案
   都正确（`status-error` / `status-ok`）。细节记在 `PROCESS.md` 的
   "Deployment" 一节。
+- 已把本地提交 push 到 `origin/main`（仓库仍是 private，没跑 `/comp4020:ship`）。
+- 做了一次专门的 UI/UX 美化（落地页、planner 页、课程目录卡片化、语义化的
+  ok/warning/error 状态文案），没动持久化行为、先修逻辑或数据模型；
+  `pnpm check` 保持全绿，另外手动跑了一遍 axe-core 扫过完整填充状态的
+  planner 页（不只是 `spec/routes.ts` 里覆盖的空状态），0 违规。
 
 ### 还没做
 
 - `reflections/crit-7.md` 还没写——按 CLAUDE.md 的要求，这个要留到接近提交
   前才写，不要提前写。
-- 本地还有 31 个 commit 领先 `origin/main`，还没 push（是否现在 push、要不要
-  把仓库设为 public 让 CI 也跑起来，需要用户确认）。
+- 新加的 5 门课和放宽上限的决定，还需要同步更新 `PROCESS.md`（下一步）。
 - 如果后续验证或提交前又做了新的决策/修正，记得同步更新 `PROCESS.md`。
 - 除非用户明确要求，不要在这些之外主动扩展功能范围。

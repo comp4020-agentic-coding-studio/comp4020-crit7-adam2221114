@@ -139,6 +139,57 @@ hitting the mutual-exclusivity conflict in both directions, and reloading
 the page to confirm all of that survived — rather than trusting the
 automated suite alone for a feature this central to the brief.
 
+### Expanding the catalogue, Computer Science only
+
+After deployment, the direction was to add more courses to the catalogue, but
+restricted to the Computer Science / School of Computing (COMP) subject
+area, since this is explicitly a demo and not a real program plan. That
+constraint mattered concretely: the Software Development specialisation's
+real ANU elective list also includes non-COMP electives (INFS8004, INFS8205,
+LAWS8445, MGMT7020, REGN8014), and those were deliberately left out even
+though they're legitimate electives in the real program, to keep every
+course in this catalogue from the same subject area.
+
+Before adding anything, I checked whether "more courses" was even compatible
+with the rules I'd already written for myself: both CLAUDE.md's `## Scope`
+section and `spec/catalogue.test.ts` capped the catalogue at 8–12 courses,
+and the existing catalogue already had 10. I asked whether to stay within
+that cap (adding at most 2 more) or to widen it — the answer was to widen it
+and add more, so I raised the cap to 8–18 in both `CLAUDE.md` (`## Scope` and
+`## Course data`) and the test's upper-bound assertion, with a dated note in
+CLAUDE.md's own progress-note section recording that the rule changed and
+why, rather than rewriting the rule as if it had always said 18.
+
+Five more real COMP courses were added, each checked against its own 2026
+ANU Programs & Courses page rather than the aggregated program page (per the
+COMP7710/COMP6710 conflation caught earlier in this process): COMP6320
+(Artificial Intelligence), COMP6262 (Logic), COMP8712 (Compiler
+Construction), COMP4130 (Managing Software Quality and Process), and
+COMP6670 (Introduction to Machine Learning). Two real candidates were
+rejected: COMP6800 and COMP6034 both explicitly require enrolment in Master
+of Computing *(Advanced)* specifically, a different program to the one this
+demo represents, and including them would have implied a program eligibility
+this catalogue doesn't actually model. COMP4300 was rejected because its ANU
+page only confirms offerings from 2027 onward, and the catalogue's existing
+convention (and the app's own "{plan.year} planning prototype" copy) is to
+only include courses confirmed offered in the demo's stated year, 2026.
+
+COMP6320 is notable as the first catalogue course where both of its real
+AND-groups are fully representable and therefore both enforced (COMP7710,
+and separately COMP6262) — every other multi-group course in the catalogue
+has at least one group with no in-catalogue alternative, so that group stays
+display-only in `requisiteText`, following the same pattern established for
+COMP8410 and COMP6442. The other four new courses each had at least one
+AND-group outside the catalogue and were modeled the same informational-only
+way. I verified COMP6320's enforcement by hand against a freshly-seeded
+local database: adding it with neither prerequisite planned was rejected
+(422, both groups listed as missing), still rejected with only COMP7710
+planned, and succeeded only once COMP6262 was also planned — confirming the
+AND semantics actually gate the add, not just the OR semantics within a
+single group that every other course exercises.
+
+`pnpm check` stayed green throughout (60/60 tests, 0 type errors).
+
 ## Deployment
 
 Before deploying, I noticed `README.md` was still the starter's template
