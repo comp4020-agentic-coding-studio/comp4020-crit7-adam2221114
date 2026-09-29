@@ -141,101 +141,49 @@ automated suite alone for a feature this central to the brief.
 
 ### Expanding the catalogue, Computer Science only
 
-After deployment, the direction was to add more courses to the catalogue, but
-restricted to the Computer Science / School of Computing (COMP) subject
-area, since this is explicitly a demo and not a real program plan. That
-constraint mattered concretely: the Software Development specialisation's
-real ANU elective list also includes non-COMP electives (INFS8004, INFS8205,
-LAWS8445, MGMT7020, REGN8014), and those were deliberately left out even
-though they're legitimate electives in the real program, to keep every
-course in this catalogue from the same subject area.
+> 现在加入更多的课程，但只限于计算机专业，因为现在只是demo
+> ("add more courses, Computer Science only — still just a demo")
 
-Before adding anything, I checked whether "more courses" was even compatible
-with the rules I'd already written for myself: both CLAUDE.md's `## Scope`
-section and `spec/catalogue.test.ts` capped the catalogue at 8–12 courses,
-and the existing catalogue already had 10. I asked whether to stay within
-that cap (adding at most 2 more) or to widen it — the answer was to widen it
-and add more, so I raised the cap to 8–18 in both `CLAUDE.md` (`## Scope` and
-`## Course data`) and the test's upper-bound assertion, with a dated note in
-CLAUDE.md's own progress-note section recording that the rule changed and
-why, rather than rewriting the rule as if it had always said 18.
+Real electives here include non-COMP subjects; left out anyway, to keep one
+subject area. That collided with my own cap: CLAUDE.md and
+`spec/catalogue.test.ts` capped the catalogue at 8–12, already at 10.
 
-Five more real COMP courses were added, each checked against its own 2026
-ANU Programs & Courses page rather than the aggregated program page (per the
-COMP7710/COMP6710 conflation caught earlier in this process): COMP6320
-(Artificial Intelligence), COMP6262 (Logic), COMP8712 (Compiler
-Construction), COMP4130 (Managing Software Quality and Process), and
-COMP6670 (Introduction to Machine Learning). Two real candidates were
-rejected: COMP6800 and COMP6034 both explicitly require enrolment in Master
-of Computing *(Advanced)* specifically, a different program to the one this
-demo represents, and including them would have implied a program eligibility
-this catalogue doesn't actually model. COMP4300 was rejected because its ANU
-page only confirms offerings from 2027 onward, and the catalogue's existing
-convention (and the app's own "{plan.year} planning prototype" copy) is to
-only include courses confirmed offered in the demo's stated year, 2026.
+> 提高上限，加更多门 ("raise the cap, add more courses")
 
-COMP6320 is notable as the first catalogue course where both of its real
-AND-groups are fully representable and therefore both enforced (COMP7710,
-and separately COMP6262) — every other multi-group course in the catalogue
-has at least one group with no in-catalogue alternative, so that group stays
-display-only in `requisiteText`, following the same pattern established for
-COMP8410 and COMP6442. The other four new courses each had at least one
-AND-group outside the catalogue and were modeled the same informational-only
-way. I verified COMP6320's enforcement by hand against a freshly-seeded
-local database: adding it with neither prerequisite planned was rejected
-(422, both groups listed as missing), still rejected with only COMP7710
-planned, and succeeded only once COMP6262 was also planned — confirming the
-AND semantics actually gate the add, not just the OR semantics within a
-single group that every other course exercises.
+Cap raised to 8–18, dated as a changed rule, not rewritten history. Five
+real COMP courses added, each checked against its own 2026 course page:
+COMP6320, COMP6262, COMP8712, COMP4130, COMP6670. Rejected: COMP6800/COMP6034
+(need Master of Computing *Advanced*), COMP4300 (not confirmed until 2027).
 
-`pnpm check` stayed green throughout (60/60 tests, 0 type errors).
+COMP6320 is the first course with both AND-groups enforced (COMP7710,
+COMP6262). Verified by hand: rejected with neither, rejected with only
+COMP7710, succeeded once COMP6262 joined. Landed in
+[`830b9f2`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit7-adam2221114/commit/830b9f2),
+`pnpm check` green (60/60).
 
 ## State-driven course cards
 
-After the catalogue expansion, a course card's action area still worked the
-way it did on day one: an always-enabled "Add to Semester 1" / "Add to
-Semester 2" button per offered semester, styled as a warning when a
-prerequisite wasn't met, plus a hint line underneath. That meant the user
-had to click Add to find out whether a placement was actually going to
-succeed — the card never told them up front.
+Cards always showed an enabled Add button regardless of prerequisites,
+warning-styled if unmet — the student had to click to find out if it would
+work.
 
-I redesigned the card's action area to be state-driven instead: for each
-course and each offered semester, the card now derives one of three states
-(`available`, `blocked`, `not-offered`) and renders accordingly, before any
-button appears. A blocked semester shows which prerequisite group is
-satisfied and which is missing, with a chip per alternative course; if a
-missing alternative is already planned (just not early enough), the card
-says so and suggests moving it earlier, and if it isn't in the plan at all,
-the card offers a one-click "Mark X as previously completed" action inline.
-Only an `available` semester gets a real, enabled Add button. "Mark this
-course previously completed" moved from a full-width secondary button to a
-small text link below the placements, so it no longer competes visually
-with the primary planning action. The official ANU requisite text is
-unchanged — still under the same `<details>` disclosure.
+> Redesign the cards to be state-driven. [...] If COMP7710 is planned in
+> Semester 1: COMP6442 must NOT be considered satisfied for Semester 1, but
+> Semester 2 should pass. [...] reuse the existing logic rather than
+> duplicating it in the UI.
 
-Importantly, none of this duplicates prerequisite logic in the template.
-The per-semester state is derived by calling the same `missingPrerequisites`
-function `addPlannedCourse` already enforces against — the template only
-does set-difference bookkeeping (matching a course's full prerequisite
-groups against the subset `missingPrerequisites` reports back, by content
-rather than by reference, since the two come from separate queries) to
-decide what to show as satisfied vs. missing. The backend prerequisite
-semantics did not change at all.
+Each course/semester now derives `available`/`blocked`/`not-offered` first,
+calling the same `missingPrerequisites` function `addPlannedCourse` already
+enforces — matching groups by content, never re-deriving the logic. A
+blocked semester names the missing course, suggests moving it earlier, or
+offers "Mark previously completed" inline. Only `available` gets a real Add
+button; "Mark previously completed" is now a small secondary link.
 
-I hand-verified the three scenarios this was built around, against a fresh
-local database: with COMP7710 marked previously completed, COMP6442 showed
-`available` for both semesters; with COMP7710 planned in Semester 1 instead,
-COMP6442's Semester 1 placement correctly showed `blocked` (same-semester
-planning doesn't count) while Semester 2 showed `available`; and with
-COMP7710 moved to Semester 2, COMP6442 showed `blocked` in both semesters,
-since Semester 2 can never satisfy a Semester 1 requirement and doesn't even
-satisfy its own semester's requirement. A course with no prerequisites at
-all (COMP6240) still renders a clean `available` card with no empty
-prerequisite clutter. `pnpm check` stayed green throughout (60/60 tests, 0
-type errors).
-
-Landed as
-[`24ce455`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit7-adam2221114/commit/24ce455).
+Verified the three scenarios by hand: previously-completed → available both
+semesters; planned Semester 1 → blocked Sem 1, available Sem 2; planned
+Semester 2 → blocked both. Landed in
+[`24ce455`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit7-adam2221114/commit/24ce455),
+`pnpm check` green (60/60).
 
 ## Deployment
 
