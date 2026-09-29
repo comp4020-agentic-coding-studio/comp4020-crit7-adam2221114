@@ -300,8 +300,14 @@ export function unmarkPreviouslyCompleted(planId: number, completedId: number): 
 // completed, or planned strictly earlier in the same plan — planning it in
 // the same semester does not count, since the two would run concurrently.
 // Returns the groups still unsatisfied (empty means the course can be
-// added).
-function missingPrerequisites(planId: number, courseId: number, semester: number): Course[][] {
+// added). Exported read-only so the UI can preview whether an add would
+// succeed before the student submits it; the enforcement itself still only
+// happens in addPlannedCourse below.
+export function missingPrerequisites(
+  planId: number,
+  courseId: number,
+  semester: number,
+): Course[][] {
   const groups = listPrerequisiteGroupsFor(courseId);
   if (groups.length === 0) return [];
 

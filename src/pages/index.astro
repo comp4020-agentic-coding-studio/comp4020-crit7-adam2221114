@@ -26,31 +26,74 @@ if (Astro.request.method === "POST") {
     <title>ANU Semester Planner</title>
   </head>
   <body>
-    <nav aria-label="site">
-      <a href="/">Planner</a>
-      <a href="/readme/">About</a>
-    </nav>
+    <header class="site-header">
+      <a class="brand" href="/">ANU Semester Planner</a>
+      <nav aria-label="site">
+        <a href="/readme/">About</a>
+      </nav>
+    </header>
     <main>
-      <h1>ANU Semester Planner</h1>
-      <p>
-        Enter your Student ID to open your semester plan. If you don't have one
-        yet, we'll create it — the same Student ID always returns to the same
-        plan.
-      </p>
-      <form method="post">
-        <label for="studentId">Student ID</label>
-        <input id="studentId" name="studentId" required maxlength="100" autocomplete="off" />
-        <button>Open my plan</button>
-      </form>
-      {error && (
-        <p role="alert" class="status status-error">
-          {error}
+      <section class="hero">
+        <h1>Plan your semester in one place</h1>
+        <p class="lede">
+          Course codes, availability and study load, side by side — instead of
+          hunting across separate ANU pages. Enter a Student ID to open a
+          saved plan, or start a new one.
         </p>
-      )}
-      <p class="note">
-        Student ID is just an identifier for this prototype — it is not a
-        password, and there is no login.
-      </p>
+
+        <div class="hero-card">
+          <form method="post" class="id-form">
+            <label for="studentId">Student ID</label>
+            <div class="field-row">
+              <input
+                id="studentId"
+                name="studentId"
+                required
+                maxlength="100"
+                autocomplete="off"
+                aria-describedby="studentId-hint"
+                placeholder="e.g. u1234567"
+              />
+              <button>Open my plan</button>
+            </div>
+            <p id="studentId-hint" class="field-hint">
+              Used only to find or create your saved plan — it is not a
+              password, and there is no ANU login.
+            </p>
+          </form>
+          {
+            error && (
+              <p role="alert" class="status status-error">
+                {error}
+              </p>
+            )
+          }
+        </div>
+
+        <ul class="how-it-works">
+          <li>
+            <span class="step-index" aria-hidden="true">1</span>
+            <div>
+              <strong>Enter your Student ID</strong>
+              <p>We'll open your saved plan, or create a new one.</p>
+            </div>
+          </li>
+          <li>
+            <span class="step-index" aria-hidden="true">2</span>
+            <div>
+              <strong>Browse the catalogue</strong>
+              <p>A small set of representative computing courses.</p>
+            </div>
+          </li>
+          <li>
+            <span class="step-index" aria-hidden="true">3</span>
+            <div>
+              <strong>Build your plan</strong>
+              <p>Add courses to Semester 1 or 2 and track unit totals.</p>
+            </div>
+          </li>
+        </ul>
+      </section>
     </main>
   </body>
 </html>

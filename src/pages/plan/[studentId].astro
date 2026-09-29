@@ -12,6 +12,7 @@ import {
   listPlannedCourses,
   listPreviouslyCompleted,
   markPreviouslyCompleted,
+  missingPrerequisites,
   PrerequisiteNotSatisfiedError,
   removePlannedCourse,
   unmarkPreviouslyCompleted,
@@ -113,44 +114,63 @@ const totals = getSemesterTotals(plan.id);
 const plannedByCourseId = new Map(planned.map((p) => [p.courseId, p]));
 const completedByCourseId = new Map(completed.map((c) => [c.courseId, c]));
 
+// Presentation-only grouping for the catalogue cards — not part of the data
+// model, just a label to help scan a page of ten courses at a glance.
+const CATEGORY_BY_CODE: Record<string, string> = {
+  COMP6120: "Software Engineering",
+  COMP6442: "Software Engineering",
+  COMP6240: "Data & Databases",
+  COMP8410: "Data & Databases",
+  COMP6260: "Foundations",
+  COMP7710: "Foundations",
+  COMP6331: "Networks & Systems",
+  COMP6390: "HCI & Design",
+  COMP8280: "Professional Practice",
+  ENGN8100: "Systems Engineering",
+};
+
 const missing = Astro.url.searchParams.get("missing");
-const STATUS_MESSAGES: Record<string, { text: string; ok: boolean }> = {
-  added: { text: "Course added to your plan.", ok: true },
-  removed: { text: "Course removed from your plan.", ok: true },
-  duplicate: { text: "That course is already in your plan.", ok: false },
-  invalid: { text: "That action couldn't be completed.", ok: false },
-  completed: { text: "Course marked as previously completed.", ok: true },
-  uncompleted: { text: "Course unmarked as previously completed.", ok: true },
+const STATUS_MESSAGES: Record<string, { text: string; kind: "ok" | "warning" | "error" }> = {
+  added: { text: "Planner checks passed — course added to your plan.", kind: "ok" },
+  removed: { text: "Course removed from your plan.", kind: "ok" },
+  duplicate: { text: "That course is already in your plan.", kind: "warning" },
+  invalid: { text: "That action couldn't be completed.", kind: "error" },
+  completed: { text: "Course marked as previously completed.", kind: "ok" },
+  uncompleted: { text: "Course unmarked as previously completed.", kind: "ok" },
   "duplicate-completed": {
     text: "That course is already marked as previously completed.",
-    ok: false,
+    kind: "warning",
   },
   "planned-conflict": {
     text: "That course is already in your plan — remove it from your plan before marking it previously completed.",
-    ok: false,
+    kind: "warning",
   },
   "completed-conflict": {
     text: "That course is marked as previously completed — unmark it before adding it to your plan.",
-    ok: false,
+    kind: "warning",
   },
   prerequisite: {
     text: missing
-      ? `This course requires ${missing} to be previously completed or planned in an earlier semester.`
-      : "This course's prerequisites aren't satisfied yet.",
-    ok: false,
+      ? `Planner check failed — this course requires ${missing} to be previously completed or planned in an earlier semester.`
+      : "Planner check failed — this course's prerequisites aren't satisfied yet.",
+    kind: "warning",
   },
 };
 const status = Astro.url.searchParams.get("status");
 const flash = status ? STATUS_MESSAGES[status] : undefined;
+const showEnrolmentCaveat = flash?.kind === "ok" || flash?.kind === "warning";
 
 const plannedForSemester = (semester: 1 | 2) => planned.filter((p) => p.semester === semester);
 
 const describeGroups = (groups: Course[][]) =>
   groups.length === 0
     ? "—"
-    : groups
-        .map((group) => group.map((course) => course.code).join(" or "))
-        .join(" and ");
+    : groups.map((group) => group.map((course) => course.code).join(" or ")).join(" and ");
+
+const offeredSemestersOf = (course: Course): (1 | 2)[] =>
+  course.offeredSemester === "Both"
+    ? [1, 2]
+    : [(course.offeredSemester === "1" ? 1 : 2) as 1 | 2];
 ---
 
 <!doctype html>
@@ -161,27 +181,47 @@ const describeGroups = (groups: Course[][]) =>
     <title>Semester plan — {studentId}</title>
   </head>
   <body>
-    <nav aria-label="site">
-      <a href="/">Planner</a>
-      <a href="/readme/">About</a>
-    </nav>
+    <header class="site-header">
+      <a class="brand" href="/">ANU Semester Planner</a>
+      <nav aria-label="site">
+        <a href="/readme/">About</a>
+      </nav>
+    </header>
     <main>
+      <p class="program-banner">
+        Master of Computing <span class="sep">·</span> Software Development
+        <span class="sep">·</span> {plan.year} planning prototype
+      </p>
+
       <h1>Your semester plan</h1>
-      <p class="note">
-        Student ID <strong>{studentId}</strong> · {plan.year} ·{" "}
+      <p class="plan-meta">
+        Student ID <strong>{studentId}</strong>
         <a href="/">switch student</a>
       </p>
       <p class="disclaimer">
         This is a student-built <strong>planning prototype</strong>, not an
-        authoritative ANU enrolment system. Always confirm requirements on the
-        official <a href="https://programsandcourses.anu.edu.au/">ANU Programs &amp; Courses</a>{" "}
-        site before enrolling.
+        authoritative ANU enrolment system. Planner checks only cover the
+        prerequisites modelled in this small catalogue — additional ANU
+        requirements may apply. Always check the official{" "}
+        <a href="https://programsandcourses.anu.edu.au/">ANU course page</a> before
+        enrolling.
       </p>
 
       {
         flash && (
-          <p role={flash.ok ? "status" : "alert"} class={`status ${flash.ok ? "status-ok" : "status-error"}`}>
-            {flash.text}
+          <p
+            role={flash.kind === "error" ? "alert" : "status"}
+            class={`status status-${flash.kind === "ok" ? "ok" : flash.kind === "warning" ? "warning" : "error"}`}
+          >
+            <span>
+              {flash.text}
+              {showEnrolmentCaveat && (
+                <span class="status-caveat">
+                  Additional ANU requirements may apply — check the official ANU course page
+                  before enrolment.
+                </span>
+              )}
+            </span>
           </p>
         )
       }
@@ -189,36 +229,49 @@ const describeGroups = (groups: Course[][]) =>
       <div class="semesters">
         {
           ([1, 2] as const).map((semester) => (
-            <section aria-labelledby={`semester-${semester}-heading`}>
-              <h2 id={`semester-${semester}-heading`}>Semester {semester}</h2>
-              <p class="units-total">{totals[semester]} units planned</p>
-              {plannedForSemester(semester).length === 0 ? (
-                <p class="empty">No courses planned for Semester {semester} yet.</p>
-              ) : (
-                <ul class="planned-list">
-                  {plannedForSemester(semester).map((entry) => (
-                    <li>
-                      <span>
-                        <strong>{entry.course.code}</strong> — {entry.course.name} (
-                        {entry.course.units} units)
-                      </span>
-                      <form method="post">
-                        <input type="hidden" name="intent" value="remove" />
-                        <input type="hidden" name="plannedCourseId" value={entry.id} />
-                        <button aria-label={`Remove ${entry.course.code} from Semester ${semester}`}>
-                          Remove
-                        </button>
-                      </form>
-                    </li>
-                  ))}
-                </ul>
-              )}
+            <section class="semester-card" data-semester={semester} aria-labelledby={`semester-${semester}-heading`}>
+              <div class="semester-card-header">
+                <h2 id={`semester-${semester}-heading`}>Semester {semester}</h2>
+                <div class="unit-stat">
+                  <span class="value">{totals[semester]}</span>
+                  <span class="label">units planned</span>
+                </div>
+              </div>
+              <div class="semester-card-body">
+                {plannedForSemester(semester).length === 0 ? (
+                  <p class="empty">
+                    No courses planned for Semester {semester} yet — add one from the catalogue
+                    below.
+                  </p>
+                ) : (
+                  <ul class="planned-list">
+                    {plannedForSemester(semester).map((entry) => (
+                      <li>
+                        <span>
+                          <span class="course-chip">{entry.course.code}</span>
+                          {entry.course.name} ({entry.course.units} units)
+                        </span>
+                        <form method="post">
+                          <input type="hidden" name="intent" value="remove" />
+                          <input type="hidden" name="plannedCourseId" value={entry.id} />
+                          <button
+                            class="ghost"
+                            aria-label={`Remove ${entry.course.code} from Semester ${semester}`}
+                          >
+                            Remove
+                          </button>
+                        </form>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </section>
           ))
         }
       </div>
 
-      <section aria-labelledby="completed-heading">
+      <section class="completed-section" aria-labelledby="completed-heading">
         <h2 id="completed-heading">Previously completed courses</h2>
         <p class="note">
           Courses you completed before this plan — outside of ANU study, or in
@@ -228,12 +281,10 @@ const describeGroups = (groups: Course[][]) =>
         {completed.length === 0 ? (
           <p class="empty">No courses marked as previously completed yet.</p>
         ) : (
-          <ul class="planned-list">
+          <ul class="completed-list">
             {completed.map((entry) => (
               <li>
-                <span>
-                  <strong>{entry.course.code}</strong> — {entry.course.name}
-                </span>
+                <span>{entry.course.code} — {entry.course.name}</span>
                 <form method="post">
                   <input type="hidden" name="intent" value="uncomplete" />
                   <input type="hidden" name="completedId" value={entry.id} />
@@ -247,76 +298,105 @@ const describeGroups = (groups: Course[][]) =>
         )}
       </section>
 
-      <section aria-labelledby="catalogue-heading">
+      <section class="catalogue-section" aria-labelledby="catalogue-heading">
         <h2 id="catalogue-heading">Course catalogue</h2>
         <p class="note">
-          A small set of representative 2026 Master of Computing (Software
+          A small set of representative {plan.year} Master of Computing (Software
           Development) courses — not the full ANU catalogue. Requisite text is
           copied from ANU Programs &amp; Courses; this prototype only enforces
           the parts of it that reference another course in this catalogue.
         </p>
-        <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th scope="col">Code</th>
-              <th scope="col">Name</th>
-              <th scope="col">Units</th>
-              <th scope="col">Offered</th>
-              <th scope="col">Enforced prerequisite</th>
-              <th scope="col">ANU requisite text</th>
-              <th scope="col">Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {
-              catalogue.map((course) => {
-                const existing = plannedByCourseId.get(course.id);
-                const alreadyCompleted = completedByCourseId.get(course.id);
-                return (
-                  <tr>
-                    <td>{course.code}</td>
-                    <td>{course.name}</td>
-                    <td>{course.units}</td>
-                    <td>{course.offeredSemester}</td>
-                    <td>{describeGroups(course.prerequisiteGroups)}</td>
-                    <td class="requisite-text">{course.requisiteText ?? "—"}</td>
-                    <td>
-                      {alreadyCompleted ? (
-                        <span class="in-plan">Previously completed</span>
-                      ) : existing ? (
-                        <span class="in-plan">In Semester {existing.semester}</span>
-                      ) : (
-                        <div class="action-cell">
-                          <form method="post" class="add-form">
-                            <input type="hidden" name="intent" value="add" />
-                            <input type="hidden" name="courseId" value={course.id} />
-                            {(course.offeredSemester === "1" || course.offeredSemester === "Both") && (
-                              <button name="semester" value="1">
-                                Add to Semester 1
-                              </button>
-                            )}
-                            {(course.offeredSemester === "2" || course.offeredSemester === "Both") && (
-                              <button name="semester" value="2">
-                                Add to Semester 2
-                              </button>
-                            )}
-                          </form>
-                          <form method="post">
-                            <input type="hidden" name="intent" value="complete" />
-                            <input type="hidden" name="courseId" value={course.id} />
-                            <button class="secondary">Mark previously completed</button>
-                          </form>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })
-            }
-          </tbody>
-        </table>
-        </div>
+
+        <ul class="course-grid">
+          {
+            catalogue.map((course) => {
+              const existing = plannedByCourseId.get(course.id);
+              const alreadyCompleted = completedByCourseId.get(course.id);
+              const status: "available" | "planned" | "completed" = alreadyCompleted
+                ? "completed"
+                : existing
+                  ? "planned"
+                  : "available";
+              const offeredLabel =
+                course.offeredSemester === "Both" ? "Semester 1 & 2" : `Semester ${course.offeredSemester}`;
+
+              return (
+                <li class="course-card" data-status={status}>
+                  <div class="course-card-top">
+                    <div>
+                      <span class="course-chip">{course.code}</span>
+                    </div>
+                    <span class="category-badge">{CATEGORY_BY_CODE[course.code] ?? "Elective"}</span>
+                  </div>
+
+                  <h3>{course.name}</h3>
+
+                  <dl class="course-meta">
+                    <div>
+                      <dt>Units</dt>
+                      <dd>{course.units}</dd>
+                    </div>
+                    <div>
+                      <dt>Offered</dt>
+                      <dd>{offeredLabel}</dd>
+                    </div>
+                  </dl>
+
+                  {course.prerequisiteGroups.length > 0 && (
+                    <p class="course-prereq">Prerequisite: {describeGroups(course.prerequisiteGroups)}</p>
+                  )}
+
+                  {course.requisiteText && (
+                    <details class="requisite-details">
+                      <summary>Official ANU requisite text</summary>
+                      <p>{course.requisiteText}</p>
+                    </details>
+                  )}
+
+                  <div class="course-actions">
+                    {status === "completed" && <span class="badge badge-completed">Previously completed</span>}
+                    {status === "planned" && existing && (
+                      <span class="badge badge-planned">In Semester {existing.semester}</span>
+                    )}
+                    {status === "available" && (
+                      <>
+                        <span class="badge badge-available">Available</span>
+                        <form method="post" class="add-form">
+                          <input type="hidden" name="intent" value="add" />
+                          <input type="hidden" name="courseId" value={course.id} />
+                          {offeredSemestersOf(course).map((semester) => {
+                            const stillMissing = missingPrerequisites(plan.id, course.id, semester);
+                            return (
+                              <span>
+                                <button
+                                  name="semester"
+                                  value={semester}
+                                  class={stillMissing.length > 0 ? "warning-outline" : undefined}
+                                >
+                                  Add to Semester {semester}
+                                </button>
+                                {stillMissing.length > 0 && (
+                                  <span class="prereq-hint">
+                                    Needs {describeGroups(stillMissing)} first
+                                  </span>
+                                )}
+                              </span>
+                            );
+                          })}
+                        </form>
+                        <form method="post">
+                          <input type="hidden" name="intent" value="complete" />
+                          <input type="hidden" name="courseId" value={course.id} />
+                          <button class="secondary">Mark previously completed</button>
+                        </form>
+                      </>
+                    )}
+                  </div>
+                </li>
+              );
+            })
+          }
+        </ul>
       </section>
     </main>
   </body>
